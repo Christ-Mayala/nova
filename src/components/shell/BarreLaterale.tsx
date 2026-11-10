@@ -39,7 +39,7 @@ import { useInterface } from '@/context/InterfaceContext';
 import { useLangue } from '@/context/LangueContext';
 import { pages as apiPages } from '@/lib/api';
 import { ROUTES, lienPage } from '@/lib/navigation';
-import { consigneInstallation, estStandalone, lancerInstallation } from '@/lib/pwa';
+import { estStandalone, lancerInstallation, ouvrirGuideInstallation } from '@/lib/pwa';
 import type { Espace } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -82,10 +82,8 @@ export function BarreLaterale() {
   const installerNova = useCallback(async () => {
     fermerBarreMobile();
     const resultat = await lancerInstallation();
-    if (resultat === 'indisponible') {
-      toasts.info('Installer NOVA', consigneInstallation());
-    }
-  }, [fermerBarreMobile, toasts]);
+    if (resultat === 'indisponible') ouvrirGuideInstallation();
+  }, [fermerBarreMobile]);
 
   // Redimensionnement par glissement de la poignée verticale.
   const debutRedimension = useCallback(

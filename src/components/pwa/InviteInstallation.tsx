@@ -1,14 +1,15 @@
 'use client';
 
-import { Download, Plus, Share, Smartphone, X } from 'lucide-react';
+import { Download, Smartphone, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
   EVENEMENT_INVITE,
+  detecterPlateforme,
   estStandalone,
-  estiOS,
   inviteInstallation,
   lancerInstallation,
+  ouvrirGuideInstallation,
 } from '@/lib/pwa';
 
 const CLE_INVITE = 'nova.pwa.invite';
@@ -27,16 +28,16 @@ const inviteRefuseeRecemment = () => {
 /**
  * Invitation discrète à installer NOVA.
  *
- * - Chrome / Edge / Android : utilise l'événement `beforeinstallprompt`,
- *   capturé tôt dans le layout pour ne jamais le manquer.
- * - iOS / Safari : affiche la procédure « Partager → Sur l'écran d'accueil ».
+ * - Prompt natif disponible (Chrome / Edge / Android) : un bouton « Installer »
+ *   déclenche directement la boîte de dialogue du navigateur.
+ * - Sinon, sur mobile : un bouton « Comment installer » ouvre le guide
+ *   pas-à-pas adapté à l'appareil (Android ou iOS).
  *
- * La bannière est visible sur mobile comme sur ordinateur, et peut être
- * masquée pendant 30 jours.
+ * La bannière est masquable pendant 30 jours.
  */
 export function InviteInstallation() {
   const [visible, setVisible] = useState(false);
-  const [plateforme, setPlateforme] = useState<'natif' | 'ios' | null>(null);
+  const [mode, setMode] = useState<'natif' | 'guide' | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || estStandalone()) return;
@@ -44,24 +45,24 @@ export function InviteInstallation() {
     let minuterie: number | null = null;
     let dejaPropose = false;
 
-    const proposer = (type: 'natif' | 'ios') => {
+    const proposer = (type: 'natif' | 'guide') => {
+      setMode(type);
       if (dejaPropose || inviteRefuseeRecemment()) return;
       dejaPropose = true;
-      setPlateforme(type);
       minuterie = window.setTimeout(() => setVisible(true), DELAI_AFFICHAGE);
     };
 
     if (inviteInstallation()) {
       proposer('natif');
-    } else if (estiOS()) {
-      proposer('ios');
+    } else if (detecterPlateforme() !== 'ordinateur') {
+      proposer('guide');
     }
 
     const surInvite = () => proposer('natif');
 
     const surInstalle = () => {
       setVisible(false);
-      setPlateforme(null);
+      setMode(null);
     };
 
     window.addEventListener(EVENEMENT_INVITE, surInvite);
@@ -89,13 +90,18 @@ export function InviteInstallation() {
     const resultat = await lancerInstallation();
     if (resultat === 'accepted') {
       setVisible(false);
-      setPlateforme(null);
+      setMode(null);
       return;
     }
     refuser();
   };
 
-  if (!visible || !plateforme) return null;
+  const afficherGuide = () => {
+    refuser();
+    ouvrirGuideInstallation();
+  };
+
+  if (!visible || !mode) return null;
 
   return (
     <div
@@ -122,36 +128,22 @@ export function InviteInstallation() {
             <Smartphone className="h-3.5 w-3.5" />
             Installer NOVA
           </p>
-          {plateforme === 'ios' ? (
-            <>
-              <p className="mt-1 text-xs texte-doux">
-                Dans Safari, touchez <Share className="inline h-3.5 w-3.5 align-text-bottom" />{' '}
-                Partager, puis{' '}
-                <span className="inline-flex items-center gap-0.5 font-medium">
-                  <Plus className="inline h-3.5 w-3.5" />
-                  Sur l’écran d’accueil
-                </span>
-                .
-              </p>
-              <button type="button" onClick={refuser} className="bouton mt-2.5 px-2.5 py-1 text-xs">
-                J’ai compris
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="mt-1 text-xs texte-doux">
-                Accédez à NOVA comme une application, même hors ligne.
-              </p>
-              <button
-                type="button"
-                onClick={() => void installer()}
-                className="bouton bouton-primaire mt-2.5 gap-1.5 px-2.5 py-1 text-xs"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Installer
-              </button>
-            </>
-          )}
+          <p className="mt-1 text-xs texte-doux">
+            Accédez à NOVA comme une application, même hors ligne.
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => (mode === 'natif' ? void installer() : afficherGuide())}
+              className="bouton bouton-primaire gap-1.5 px-2.5 py-1 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {mode === 'natif' ? 'Installer' : 'Comment installer'}
+            </button>
+            <button type="button" onClick={refuser} className="bouton px-2.5 py-1 text-xs">
+              Plus tard
+            </button>
+          </div>
         </div>
         <button
           type="button"

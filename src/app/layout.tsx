@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 
 import './globals.css';
 import { EnregistrementSW } from '@/components/pwa/EnregistrementSW';
+import { GuideInstallation } from '@/components/pwa/GuideInstallation';
 import { InviteInstallation } from '@/components/pwa/InviteInstallation';
 import { FournisseurConfirmation } from '@/components/ui/Confirmation';
 import { FournisseurToasts } from '@/components/ui/Toasts';
@@ -80,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </FournisseurApparence>
         <EnregistrementSW />
         <InviteInstallation />
+        <GuideInstallation />
       </body>
     </html>
   );
