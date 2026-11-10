@@ -6,9 +6,11 @@ import { Fragment, type ReactNode } from 'react';
  * Rendu Markdown minimaliste, sans dépendance externe.
  *
  * Couvre le sous-ensemble produit par l'assistant IA : titres, listes,
- * citations, blocs de code, séparateurs, gras/italique/barré, code inline et
- * liens. Le contenu est rendu en nœuds React (pas de `dangerouslySetInnerHTML`),
- * donc tout HTML présent dans la réponse est affiché comme du texte.
+ * citations, blocs de code, séparateurs, tableaux (GFM), gras/italique/barré,
+ * code inline et liens. Le contenu est rendu en nœuds React (pas de
+ * `dangerouslySetInnerHTML`), donc tout HTML présent dans la réponse est
+ * affiché comme du texte — à l'exception de `<br>`, converti en retour à la
+ * ligne pour rester lisible dans les cellules de tableau.
  */
 
 const INLINE =
@@ -16,7 +18,40 @@ const INLINE =
 
 const LIEN_SUR = /^(https?:\/\/|mailto:|\/|#)/i;
 
+/** Marqueur interne remplaçant un `<br>` : rendu en vrai retour à la ligne. */
+const TOKEN_BR = '\u0000';
+
+/** Ligne susceptible d'appartenir à un tableau (contient un séparateur `|`). */
+function estLigneTableau(ligne: string): boolean {
+  return ligne.includes('|');
+}
+
+/** Ligne de séparation d'en-tête GFM : `| --- | :---: |`. */
+function estSeparateurTableau(ligne: string): boolean {
+  return /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/.test(ligne);
+}
+
+/** Découpe une ligne de tableau en cellules (sans les `|` de bord). */
+function decouperCellules(ligne: string): string[] {
+  return ligne
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cellule) => cellule.trim());
+}
+
 function rendreLigne(texte: string, cle: string): ReactNode[] {
+  // Un `<br>` (ou son équivalent échappé) devient un vrai saut de ligne : c'est
+  // indispensable dans les cellules de tableau, où un retour à la ligne brut
+  // découperait la ligne en deux.
+  if (texte.includes(TOKEN_BR)) {
+    return texte.split(TOKEN_BR).flatMap((partie, index) => [
+      ...(index > 0 ? [<br key={`${cle}-br-${index}`} />] : []),
+      ...rendreLigne(partie, `${cle}-${index}`),
+    ]);
+  }
+
   const morceaux = texte.split(INLINE).filter((morceau) => morceau !== '');
 
   return morceaux.map((morceau, index) => {
@@ -95,7 +130,14 @@ function ouvreBloc(ligne: string): boolean {
 }
 
 function decouper(contenu: string): ReactNode[] {
-  const lignes = contenu.replace(/\r\n/g, '\n').split('\n');
+  const lignes = contenu
+    .replace(/\r\n/g, '\n')
+    // L'assistant renvoie parfois des `<br>` (HTML) pour séparer deux points
+    // d'un même paragraphe ou d'une même cellule. On les convertit en marqueur
+    // avant de découper en lignes, pour ne pas casser une ligne de tableau.
+    .replace(/<br\s*\/?>/gi, TOKEN_BR)
+    .replace(/&lt;br\s*\/?&gt;/gi, TOKEN_BR)
+    .split('\n');
   const sortie: ReactNode[] = [];
   let i = 0;
   let cle = 0;
@@ -221,9 +263,92 @@ function decouper(contenu: string): ReactNode[] {
       continue;
     }
 
+    // Tableaux (GFM) : en-tête, ligne de séparation, puis lignes de données.
+    if (estLigneTableau(ligne) && estSeparateurTableau(lignes[i + 1] ?? '')) {
+      const entetes = decouperCellules(ligne);
+      const alignements = decouperCellules(lignes[i + 1]).map((cellule) =>
+        cellule.startsWith(':') && cellule.endsWith(':')
+          ? 'center'
+          : cellule.endsWith(':')
+            ? 'right'
+            : cellule.startsWith(':')
+              ? 'left'
+              : undefined
+      );
+      i += 2;
+      const corps: string[][] = [];
+      while (
+        i < lignes.length &&
+        lignes[i].trim() &&
+        estLigneTableau(lignes[i]) &&
+        !estSeparateurTableau(lignes[i])
+      ) {
+        corps.push(decouperCellules(lignes[i]));
+        i += 1;
+      }
+      const identifiant = cle++;
+      sortie.push(
+        <div
+          key={identifiant}
+          className="overflow-x-auto rounded-md border"
+          style={{ borderColor: 'var(--bordure)' }}
+        >
+          <table className="w-full border-collapse text-left text-[13px]">
+            <thead>
+              <tr>
+                {entetes.map((entete, index) => (
+                  <th
+                    key={index}
+                    scope="col"
+                    className="px-2.5 py-1.5 align-top font-semibold"
+                    style={{
+                      backgroundColor: 'var(--fond-secondaire)',
+                      textAlign: alignements[index],
+                      borderBottom: '1px solid var(--bordure)',
+                    }}
+                  >
+                    {rendreLigne(entete, `th-${identifiant}-${index}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {corps.map((rangee, ligneIndex) => (
+                <tr key={ligneIndex}>
+                  {entetes.map((entete, colonneIndex) => (
+                    <td
+                      key={`${entete}-${colonneIndex}`}
+                      className="px-2.5 py-1.5 align-top"
+                      style={{
+                        textAlign: alignements[colonneIndex],
+                        borderBottom:
+                          ligneIndex < corps.length - 1 ? '1px solid var(--bordure)' : undefined,
+                      }}
+                    >
+                      {rendreLigne(
+                        rangee[colonneIndex] ?? '',
+                        `td-${identifiant}-${ligneIndex}-${colonneIndex}`
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
     // Paragraphe (regroupe les lignes consécutives)
     const paragraphe: string[] = [];
-    while (i < lignes.length && lignes[i].trim() && !ouvreBloc(lignes[i])) {
+    while (
+      i < lignes.length &&
+      lignes[i].trim() &&
+      !ouvreBloc(lignes[i]) &&
+      // Une ligne amorçant un tableau ne doit pas être absorbée par le texte.
+      !(estLigneTableau(lignes[i]) && estSeparateurTableau(lignes[i + 1] ?? ''))
+    ) {
       paragraphe.push(lignes[i].trim());
       i += 1;
     }
