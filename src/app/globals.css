@@ -1,0 +1,256 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================== */
+/* Thème — variables CSS (clair par défaut, sombre via la classe .dark) */
+/* ================================================================== */
+
+:root {
+  --fond: #ffffff;
+  --fond-secondaire: #f7f7f5;
+  --fond-tertiaire: #efefed;
+  --fond-barre: #fbfbfa;
+  --texte: #37352f;
+  --texte-doux: #73726e;
+  --texte-faible: #9b9a97;
+  --bordure: #e9e9e7;
+  --bordure-forte: #d3d1cb;
+  --accent: #2383e2;
+  --accent-doux: #e7f1fb;
+  --survol: rgba(55, 53, 47, 0.06);
+  --surbrillance: rgba(35, 131, 226, 0.14);
+
+  --police-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --police-serif: Georgia, 'Iowan Old Style', 'Times New Roman', 'Noto Serif', serif;
+  --police-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono',
+    monospace;
+}
+
+.dark {
+  --fond: #191919;
+  --fond-secondaire: #202020;
+  --fond-tertiaire: #2a2a2a;
+  --fond-barre: #202020;
+  --texte: #e6e6e4;
+  --texte-doux: #9b9b98;
+  --texte-faible: #6f6f6c;
+  --bordure: #2f2f2f;
+  --bordure-forte: #414141;
+  --accent: #4a9eeb;
+  --accent-doux: #17293b;
+  --survol: rgba(255, 255, 255, 0.055);
+  --surbrillance: rgba(74, 158, 235, 0.22);
+}
+
+/* ================================================================== */
+/* Base                                                                */
+/* ================================================================== */
+
+* {
+  border-color: var(--bordure);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--fond);
+  color: var(--texte);
+  font-family: var(--police-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Police de l'espace de travail (défaut / serif / mono), pilotée par les réglages. */
+html[data-police='serif'] body {
+  font-family: var(--police-serif);
+}
+
+html[data-police='mono'] body {
+  font-family: var(--police-mono);
+}
+
+::selection {
+  background: var(--surbrillance);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* Barres de défilement discrètes (façon NOVA). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bordure-forte) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--bordure-forte);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  /* Bouton neutre de base. */
+  .bouton {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm
+      transition-colors disabled:opacity-50 disabled:pointer-events-none;
+    color: var(--texte);
+  }
+
+  .bouton:hover {
+    background-color: var(--survol);
+  }
+
+  .bouton-primaire {
+    background-color: var(--accent);
+    color: #ffffff;
+  }
+
+  .bouton-primaire:hover {
+    background-color: var(--accent);
+    filter: brightness(1.07);
+  }
+
+  /* Champ de saisie neutre. */
+  .champ {
+    @apply w-full rounded-md px-2 py-1.5 text-sm outline-none;
+    background-color: var(--fond);
+    border: 1px solid var(--bordure-forte);
+    color: var(--texte);
+  }
+
+  .champ::placeholder {
+    color: var(--texte-faible);
+  }
+
+  /* Étiquette compacte. */
+  .etiquette {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium;
+  }
+
+  /* Carte / panneau. */
+  .carte {
+    background-color: var(--fond);
+    border: 1px solid var(--bordure);
+    border-radius: 8px;
+  }
+
+  /* Menu déroulant flottant. */
+  .menu-flottant {
+    @apply z-50 min-w-[220px] max-h-[70vh] overflow-y-auto overflow-x-hidden rounded-xl p-1.5 text-sm;
+    background-color: var(--fond);
+    border: 1px solid var(--bordure);
+    box-shadow:
+      0 1px 2px rgba(15, 15, 15, 0.06),
+      0 6px 20px rgba(15, 15, 15, 0.13);
+  }
+
+  .menu-item {
+    @apply flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left
+      transition-colors duration-100;
+    color: var(--texte);
+  }
+
+  .menu-item:hover,
+  .menu-item:focus-visible {
+    background-color: var(--survol);
+  }
+
+  .menu-item:focus-visible {
+    outline: none;
+  }
+
+  /* Lien de la barre latérale. */
+  .lien-barre {
+    @apply flex w-full items-center gap-2 rounded px-2 py-1.5 text-[15px];
+    color: var(--texte-doux);
+  }
+
+  .lien-barre:hover {
+    background-color: var(--survol);
+    color: var(--texte);
+  }
+
+  .lien-barre-actif {
+    background-color: var(--survol);
+    color: var(--texte);
+    font-weight: 500;
+  }
+}
+
+@layer utilities {
+  .texte-doux {
+    color: var(--texte-doux);
+  }
+
+  .texte-faible {
+    color: var(--texte-faible);
+  }
+
+  .fond-survol:hover {
+    background-color: var(--survol);
+  }
+
+  .defilement-fin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+}
+
+/* ================================================================== */
+/* Rendu du contenu des blocs de l'éditeur                             */
+/* ================================================================== */
+
+.contenu-bloc h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.contenu-bloc h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.contenu-bloc h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.contenu-bloc code {
+  font-family: var(--police-mono);
+  font-size: 0.85em;
+}
+
+/* Animation d'apparition pour les panneaux / menus. */
+@keyframes apparition {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,60 @@
+# Déploiement NOVA sur Netlify (frontend Next.js).
+#
+# L'API DRY (Express + MongoDB + Socket.IO) est déjà en ligne sur Render.
+# Le temps réel (Socket.IO) est servi par cette même API : aucun serveur
+# WebSocket séparé n'est nécessaire. Le client s'y connecte directement, car
+# les WebSockets ne traversent pas les fonctions serverless Netlify.
+#
+# Les valeurs ci-dessous sont celles de production ; elles peuvent être
+# surchargées dans Netlify → Site configuration → Environment variables.
+#
+# `next.config.mjs` proxifie /api et /v1 vers DRY_API_URL. Le proxy évite les
+# restrictions CORS du navigateur, mais l'API vérifie quand même l'en-tête
+# Origin : ajoutez l'URL du site Netlify à CORS_ORIGINS et ALLOWED_ORIGINS
+# dans les variables d'environnement Render. Pour Socket.IO,
+# NEXT_PUBLIC_SOCKET_URL connecte le navigateur directement à l'API ; cette
+# même origine doit donc être autorisée côté Render.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+  NPM_FLAGS = "--no-audit --no-fund"
+  DRY_API_URL = "https://dryapi.onrender.com"
+  NEXT_PUBLIC_SOCKET_URL = "https://dryapi.onrender.com"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Service worker : jamais mis en cache par le CDN, portée racine.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "application/manifest+json"
+
+[[headers]]
+  for = "/offline.html"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
