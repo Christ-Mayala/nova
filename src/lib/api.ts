@@ -431,6 +431,13 @@ export const authentification = {
 
   /** Déconnexion serveur (révocation des jetons de rafraîchissement). */
   deconnexion: () => executerData<null>('/user/logout', { methode: 'POST' }),
+
+  /** Demande de réinitialisation de mot de passe (envoie un code par e-mail). */
+  motDePasseOublie: (email: string) =>
+    executerData<{ message: string }>('/user/password-reset/request', {
+      methode: 'POST',
+      corps: { email },
+    }),
 };
 
 /* ------------------------------------------------------------------ */

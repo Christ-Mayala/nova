@@ -7,6 +7,7 @@ import { useState, type FormEvent } from 'react';
 
 import { useToasts } from '@/components/ui/Toasts';
 import { useAuth } from '@/context/AuthContext';
+import { authentification } from '@/lib/api';
 import { ROUTES } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
@@ -16,12 +17,15 @@ export default function PageConnexion() {
   const toasts = useToasts();
   const router = useRouter();
 
+  const estDeveloppement = process.env.NODE_ENV === 'development';
   const [mode, setMode] = useState<'connexion' | 'inscription'>('connexion');
   const [name, setNom] = useState('');
-  const [email, setEmail] = useState('admin@admin.com');
-  const [password, setMotDePasse] = useState('Admin@2026');
+  const [email, setEmail] = useState(estDeveloppement ? 'admin@admin.com' : '');
+  const [password, setMotDePasse] = useState(estDeveloppement ? 'Admin@2026' : '');
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [motDePasseOublie, setMotDePasseOublie] = useState(false);
+  const [emailReset, setEmailReset] = useState('');
 
   async function soumettre(e: FormEvent) {
     e.preventDefault();
@@ -34,7 +38,12 @@ export default function PageConnexion() {
         await inscription({ name: name || email, email, password });
       }
       toasts.succes('Connexion réussie', 'Bienvenue dans votre espace de travail.');
-      router.push(ROUTES.accueil);
+      const suivant = new URLSearchParams(window.location.search).get('suivant');
+      const destination =
+        suivant && suivant.startsWith('/') && !suivant.startsWith('//') && !suivant.startsWith('/connexion')
+          ? suivant
+          : ROUTES.accueil;
+      router.push(destination);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Échec de l’authentification.';
       setErreur(message);
@@ -144,9 +153,90 @@ export default function PageConnexion() {
           </form>
         </div>
 
-        <p className="mt-4 text-center text-xs texte-faible">
-          Compte de démonstration : admin@admin.com / Admin@2026
-        </p>
+        {/* Formulaire de réinitialisation de mot de passe */}
+        {motDePasseOublie && (
+          <div className="mt-4 p-4 rounded-lg border border-sky-500 bg-sky-50/50 dark:border-sky-400/50 dark:bg-sky-950/50">
+            <h2 className="text-sm font-medium text-sky-600 dark:text-sky-400 mb-3">Mot de passe oublié</h2>
+            <p className="text-xs texte-doux mb-4">Entrez votre adresse e-mail pour recevoir un lien de réinitialisation.</p>
+            <form onSubmit={async (e: FormEvent) => {
+              e.preventDefault();
+              setEnCours(true);
+              try {
+                const resultat = await authentification.motDePasseOublie(emailReset);
+                toasts.info(resultat.message || 'Un e-mail vous a été envoyé avec un lien de réinitialisation.');
+                setMotDePasseOublie(false);
+                setEmailReset('');
+              } catch (e: any) {
+                const message = e instanceof Error ? e.message : 'Échec de la demande.';
+                setErreur(message);
+              } finally {
+                setEnCours(false);
+              }
+            }}>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium texte-doux">Adresse e-mail</span>
+                <input
+                  type="email"
+                  className="champ"
+                  value={emailReset}
+                  onChange={(e) => setEmailReset(e.target.value)}
+                  placeholder="vous@exemple.fr"
+                  required
+                />
+              </label>
+              <button type="submit" disabled={enCours} className="bouton bouton-primaire mt-2 w-full">
+                {enCours && <Loader2 className="h-4 w-4 animate-spin" />}
+                Envoyer le lien
+              </button>
+            </form>
+          </div>
+        )}
+
+
+
+        {motDePasseOublie && (
+          <div className="mt-4 p-4 rounded-lg border border-sky-500 bg-sky-50/50 dark:border-sky-400/50 dark:bg-sky-950/50">
+            <h2 className="text-sm font-medium text-sky-600 dark:text-sky-400 mb-3">Mot de passe oublié</h2>
+            <p className="text-xs texte-doux mb-4">Entrez votre adresse e-mail pour recevoir un lien de réinitialisation.</p>
+            <form onSubmit={async (e: FormEvent) => {
+              e.preventDefault();
+              setEnCours(true);
+              try {
+                const resultat = await authentification.motDePasseOublie(emailReset);
+                toasts.info(resultat.message || 'Un e-mail vous a été envoyé avec un lien de réinitialisation.');
+                setMotDePasseOublie(false);
+                setEmailReset('');
+              } catch (e: any) {
+                const message = e instanceof Error ? e.message : 'Échec de la demande.';
+                setErreur(message);
+              } finally {
+                setEnCours(false);
+              }
+            }}>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium texte-doux">Adresse e-mail</span>
+                <input
+                  type="email"
+                  className="champ"
+                  value={emailReset}
+                  onChange={(e) => setEmailReset(e.target.value)}
+                  placeholder="vous@exemple.fr"
+                  required
+                />
+              </label>
+              <button type="submit" disabled={enCours} className="bouton bouton-primaire mt-2 w-full">
+                {enCours && <Loader2 className="h-4 w-4 animate-spin" />}
+                Envoyer le lien
+              </button>
+            </form>
+          </div>
+        )}
+
+        {estDeveloppement && (
+          <p className="mt-4 text-center text-xs texte-faible">
+            Compte de démonstration : admin@admin.com / Admin@2026
+          </p>
+        )}
         {estConnecte && (
           <p className="mt-2 text-center text-xs texte-doux">Vous êtes déjà connecté.</p>
         )}

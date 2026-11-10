@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarDays,
   ChevronsLeft,
+  Download,
   ChevronsRight,
   ChevronsUpDown,
   FilePlus2,
@@ -38,6 +39,7 @@ import { useInterface } from '@/context/InterfaceContext';
 import { useLangue } from '@/context/LangueContext';
 import { pages as apiPages } from '@/lib/api';
 import { ROUTES, lienPage } from '@/lib/navigation';
+import { consigneInstallation, estStandalone, lancerInstallation } from '@/lib/pwa';
 import type { Espace } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -58,7 +60,32 @@ export function BarreLaterale() {
   const chemin = usePathname();
   const router = useRouter();
   const [redimension, setRedimension] = useState(false);
+  const [installe, setInstalle] = useState(false);
   const refBarre = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setInstalle(estStandalone());
+  }, []);
+
+  // Écouter l'événement appinstalled pour masquer le bouton après installation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      setInstalle(true);
+    };
+    window.addEventListener('appinstalled', handler);
+    return () => {
+      window.removeEventListener('appinstalled', handler);
+    };
+  }, []);
+
+  const installerNova = useCallback(async () => {
+    fermerBarreMobile();
+    const resultat = await lancerInstallation();
+    if (resultat === 'indisponible') {
+      toasts.info('Installer NOVA', consigneInstallation());
+    }
+  }, [fermerBarreMobile, toasts]);
 
   // Redimensionnement par glissement de la poignée verticale.
   const debutRedimension = useCallback(
@@ -248,6 +275,16 @@ export function BarreLaterale() {
 
       {/* Pied : corbeille et paramètres (le compte est en haut à droite). */}
       <div className="flex shrink-0 flex-col gap-px border-t px-2 py-2" style={{ borderColor: 'var(--bordure)' }}>
+        {!installe && (
+          <button
+            type="button"
+            onClick={() => void installerNova()}
+            className="lien-barre w-full"
+          >
+            <Download className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate">Installer NOVA</span>
+          </button>
+        )}
         <LienBarre
           href={ROUTES.corbeille}
           icone={Trash2}

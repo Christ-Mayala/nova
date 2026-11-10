@@ -148,15 +148,15 @@ export default function PageMessagerie() {
 
   return (
     <div
-      className="flex h-[calc(100vh-3.5rem)] w-full overflow-hidden"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden md:flex-row"
       style={{ backgroundColor: 'var(--fond)' }}
     >
-      {/* Colonne latérale gauche : liste des canaux d'espaces (façon Teams) */}
+      {/* Colonne latérale : liste des canaux (horizontale sur mobile) */}
       <aside
-        className="flex w-72 shrink-0 flex-col border-r"
+        className="flex max-h-[42vh] w-full shrink-0 flex-col border-b md:max-h-none md:w-72 md:border-b-0 md:border-r"
         style={{ borderColor: 'var(--bordure)', backgroundColor: 'var(--fond-barre)' }}
       >
-        <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--bordure)' }}>
+        <div className="flex items-center gap-2 border-b px-3 py-2 md:px-4 md:py-3" style={{ borderColor: 'var(--bordure)' }}>
           <MessagesSquare className="h-5 w-5 text-sky-500" />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-bold">{t('messagerie.titre')}</h1>
@@ -165,7 +165,7 @@ export default function PageMessagerie() {
         </div>
 
         {/* Champ de recherche de canal */}
-        <div className="border-b px-3 py-2" style={{ borderColor: 'var(--bordure)' }}>
+        <div className="border-b px-2 py-1.5 md:px-3 md:py-2" style={{ borderColor: 'var(--bordure)' }}>
           <div className="relative">
             <Search className="texte-faible pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5" />
             <input
@@ -187,7 +187,7 @@ export default function PageMessagerie() {
                 : t('messagerie.aucunCanalFiltre')}
             </p>
           ) : (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-row gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0">
               {canauxFiltres.map((espace) => {
                 const estActif = espaceActif?._id === espace._id;
                 return (
@@ -196,7 +196,7 @@ export default function PageMessagerie() {
                     type="button"
                     onClick={() => setEspaceSelectionneId(espace._id)}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                      'flex w-auto shrink-0 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors md:w-full md:gap-2.5 md:px-3 md:py-2',
                       estActif
                         ? 'bg-sky-500/10 font-semibold text-sky-600 dark:bg-sky-500/20 dark:text-sky-400'
                         : 'texte-doux hover:bg-black/5 dark:hover:bg-white/5'
@@ -207,7 +207,7 @@ export default function PageMessagerie() {
                     ) : (
                       <Hash className="h-4 w-4 shrink-0 texte-faible" />
                     )}
-                    <span className="min-w-0 flex-1 truncate">{espace.nom}</span>
+                    <span className="min-w-0 max-w-[10rem] flex-1 truncate md:max-w-none">{espace.nom}</span>
                   </button>
                 );
               })}
@@ -222,10 +222,10 @@ export default function PageMessagerie() {
           <>
             {/* En-tête du canal */}
             <header
-              className="flex shrink-0 items-center justify-between border-b px-6 py-3.5"
+              className="flex shrink-0 items-center justify-between border-b px-3 py-2.5 md:px-6 md:py-3.5"
               style={{ borderColor: 'var(--bordure)' }}
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex min-w-0 items-center gap-2 md:gap-3">
                 {espaceActif.icone ? (
                   <IconeDonnee icone={espaceActif.icone} className="h-6 w-6 shrink-0" />
                 ) : (
@@ -236,7 +236,7 @@ export default function PageMessagerie() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-base font-bold">{espaceActif.nom}</h2>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                       {t('equipe.enLigne')}
                     </span>

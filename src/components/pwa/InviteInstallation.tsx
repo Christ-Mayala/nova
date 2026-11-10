@@ -3,30 +3,17 @@
 import { Download, Plus, Share, Smartphone, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import {
+  EVENEMENT_INVITE,
+  estStandalone,
+  estiOS,
+  inviteInstallation,
+  lancerInstallation,
+} from '@/lib/pwa';
+
 const CLE_INVITE = 'nova.pwa.invite';
 const DELAI_REFUS = 30 * 24 * 60 * 60 * 1000;
-const DELAI_AFFICHAGE = 1800;
-
-interface EvenementInstallation extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-const estiOS = () => {
-  if (typeof navigator === 'undefined') return false;
-  return (
-    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
-};
-
-const estStandalone = () => {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-};
+const DELAI_AFFICHAGE = 1500;
 
 const inviteRefuseeRecemment = () => {
   try {
@@ -38,52 +25,56 @@ const inviteRefuseeRecemment = () => {
 };
 
 /**
- * Invitation discrète à installer NOVA sur l'écran d'accueil.
+ * Invitation discrète à installer NOVA.
  *
- * - Android / Chrome : utilise l'événement `beforeinstallprompt`.
+ * - Chrome / Edge / Android : utilise l'événement `beforeinstallprompt`,
+ *   capturé tôt dans le layout pour ne jamais le manquer.
  * - iOS / Safari : affiche la procédure « Partager → Sur l'écran d'accueil ».
+ *
+ * La bannière est visible sur mobile comme sur ordinateur, et peut être
+ * masquée pendant 30 jours.
  */
 export function InviteInstallation() {
   const [visible, setVisible] = useState(false);
-  const [plateforme, setPlateforme] = useState<'android' | 'ios' | null>(null);
-  const [invite, setInvite] = useState<EvenementInstallation | null>(null);
+  const [plateforme, setPlateforme] = useState<'natif' | 'ios' | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || estStandalone() || inviteRefuseeRecemment()) return;
-    if (!window.matchMedia('(max-width: 767px)').matches) return;
+    if (typeof window === 'undefined' || estStandalone()) return;
 
-    const surInvite = (event: Event) => {
-      event.preventDefault();
-      setInvite(event as EvenementInstallation);
-      setPlateforme('android');
+    let minuterie: number | null = null;
+    let dejaPropose = false;
+
+    const proposer = (type: 'natif' | 'ios') => {
+      if (dejaPropose || inviteRefuseeRecemment()) return;
+      dejaPropose = true;
+      setPlateforme(type);
+      minuterie = window.setTimeout(() => setVisible(true), DELAI_AFFICHAGE);
     };
 
-    window.addEventListener('beforeinstallprompt', surInvite);
+    if (inviteInstallation()) {
+      proposer('natif');
+    } else if (estiOS()) {
+      proposer('ios');
+    }
 
-    const minuterie = window.setTimeout(() => {
-      if (estiOS()) {
-        setPlateforme('ios');
-        setVisible(true);
-      }
-    }, DELAI_AFFICHAGE);
+    const surInvite = () => proposer('natif');
 
     const surInstalle = () => {
       setVisible(false);
-      setInvite(null);
+      setPlateforme(null);
     };
+
+    window.addEventListener(EVENEMENT_INVITE, surInvite);
+    window.addEventListener('beforeinstallprompt', surInvite);
     window.addEventListener('appinstalled', surInstalle);
 
     return () => {
-      window.clearTimeout(minuterie);
+      if (minuterie !== null) window.clearTimeout(minuterie);
+      window.removeEventListener(EVENEMENT_INVITE, surInvite);
       window.removeEventListener('beforeinstallprompt', surInvite);
       window.removeEventListener('appinstalled', surInstalle);
     };
   }, []);
-
-  useEffect(() => {
-    if (!invite) return;
-    setVisible(true);
-  }, [invite]);
 
   const refuser = () => {
     try {
@@ -95,25 +86,20 @@ export function InviteInstallation() {
   };
 
   const installer = async () => {
-    if (!invite) {
-      refuser();
+    const resultat = await lancerInstallation();
+    if (resultat === 'accepted') {
+      setVisible(false);
+      setPlateforme(null);
       return;
     }
-    await invite.prompt();
-    const choix = await invite.userChoice;
-    if (choix.outcome === 'accepted') {
-      setVisible(false);
-      setInvite(null);
-    } else {
-      refuser();
-    }
+    refuser();
   };
 
   if (!visible || !plateforme) return null;
 
   return (
     <div
-      className="fixed inset-x-4 z-40 rounded-xl border shadow-lg md:hidden"
+      className="fixed inset-x-4 z-40 rounded-xl border shadow-lg sm:left-auto sm:right-4 sm:w-[22rem]"
       style={{
         bottom: 'calc(1rem + env(safe-area-inset-bottom))',
         backgroundColor: 'var(--fond)',
@@ -158,7 +144,7 @@ export function InviteInstallation() {
               </p>
               <button
                 type="button"
-                onClick={installer}
+                onClick={() => void installer()}
                 className="bouton bouton-primaire mt-2.5 gap-1.5 px-2.5 py-1 text-xs"
               >
                 <Download className="h-3.5 w-3.5" />

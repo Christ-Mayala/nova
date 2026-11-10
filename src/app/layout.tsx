@@ -49,9 +49,19 @@ export const viewport: Viewport = {
   ],
 };
 
+/**
+ * Capture `beforeinstallprompt` avant l'hydratation : certains navigateurs
+ * déclenchent l'événement très tôt, avant que le composant d'invitation soit
+ * monté. L'événement est conservé pour être rejoué depuis l'interface.
+ */
+const SCRIPT_INSTALLATION = `(function(){window.__novaInstallPrompt=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__novaInstallPrompt=e;window.dispatchEvent(new CustomEvent('nova:installprompt'));});window.addEventListener('appinstalled',function(){window.__novaInstallPrompt=null;});})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" translate="no" className="notranslate" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_INSTALLATION }} />
+      </head>
       <body>
         <FournisseurApparence>
           <FournisseurToasts>

@@ -24,7 +24,7 @@ export function EnTete({ actions }: { actions?: ReactNode }) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-11 shrink-0 items-center gap-2 px-2 backdrop-blur"
+      className="sticky top-0 z-30 flex h-11 shrink-0 items-center gap-2 px-2 backdrop-blur justify-end"
       style={{ backgroundColor: 'color-mix(in srgb, var(--fond) 88%, transparent)', borderBottom: '1px solid transparent' }}
     >
       <button
