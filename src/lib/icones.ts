@@ -28,9 +28,13 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
   Image as IconeImage,
   Kanban,
   LayoutGrid,
+  LayoutPanelTop,
   LayoutTemplate,
   Lightbulb,
   Link,
@@ -124,6 +128,9 @@ export const iconeParTypeBloc: Record<TypeBloc, LucideIcon> = {
   titre_1: Heading1,
   titre_2: Heading2,
   titre_3: Heading3,
+  titre_4: Heading4,
+  titre_5: Heading5,
+  titre_6: Heading6,
   liste_a_puces: List,
   liste_numerotee: ListOrdered,
   a_faire: CheckSquare,
@@ -150,6 +157,10 @@ export const iconeParTypeBloc: Record<TypeBloc, LucideIcon> = {
   ia_resume: Sparkles,
   ia_actions: ListChecks,
   note: NotebookText,
+  onglets: LayoutPanelTop,
+  galerie: LayoutGrid,
+  graphique: BarChart3,
+  raccourci: Link,
 };
 
 /** Icônes vectorielles par type de propriété de base. */
@@ -211,6 +222,9 @@ export const libelleTypeBloc: Record<TypeBloc, string> = {
   titre_1: 'Titre 1',
   titre_2: 'Titre 2',
   titre_3: 'Titre 3',
+  titre_4: 'Titre 4',
+  titre_5: 'Titre 5',
+  titre_6: 'Titre 6',
   liste_a_puces: 'Liste à puces',
   liste_numerotee: 'Liste numérotée',
   a_faire: 'Case à cocher',
@@ -237,6 +251,10 @@ export const libelleTypeBloc: Record<TypeBloc, string> = {
   ia_resume: 'Résumé IA',
   ia_actions: 'Actions IA',
   note: 'Note',
+  onglets: 'Onglets',
+  galerie: 'Galerie',
+  graphique: 'Graphique',
+  raccourci: 'Raccourci',
 };
 
 /** Libellés français des types de propriétés de base. */
@@ -306,6 +324,9 @@ export const catalogueBlocs: GroupeCatalogueBloc[] = [
       { type: 'titre_1', libelle: 'Titre 1', description: 'Grand titre de section.', motsCles: 'titre h1 heading' },
       { type: 'titre_2', libelle: 'Titre 2', description: 'Titre de sous-section.', motsCles: 'titre h2 heading sous' },
       { type: 'titre_3', libelle: 'Titre 3', description: 'Petit titre.', motsCles: 'titre h3 heading petit' },
+      { type: 'titre_4', libelle: 'Titre 4', description: 'Titre de niveau 4.', motsCles: 'titre h4 heading niveau' },
+      { type: 'titre_5', libelle: 'Titre 5', description: 'Titre de niveau 5.', motsCles: 'titre h5 heading niveau' },
+      { type: 'titre_6', libelle: 'Titre 6', description: 'Titre de niveau 6.', motsCles: 'titre h6 heading niveau' },
       { type: 'liste_a_puces', libelle: 'Liste à puces', description: 'Liste non ordonnée.', motsCles: 'liste puces ul bullet' },
       { type: 'liste_numerotee', libelle: 'Liste numérotée', description: 'Liste ordonnée.', motsCles: 'liste numerotee ol nombre' },
       { type: 'a_faire', libelle: 'Case à cocher', description: 'Suivre les tâches.', motsCles: 'tache todo case cocher' },
@@ -352,6 +373,15 @@ export const catalogueBlocs: GroupeCatalogueBloc[] = [
       { type: 'bouton_modele', libelle: 'Bouton de modèle', description: 'Dupliquer un modèle en un clic.', motsCles: 'modele template bouton' },
       { type: 'ia_resume', libelle: 'Résumé IA', description: 'Résumé généré automatiquement.', motsCles: 'ia resume summary assistant' },
       { type: 'ia_actions', libelle: 'Actions IA', description: 'Extraire les actions à mener.', motsCles: 'ia actions taches assistant' },
+    ],
+  },
+  {
+    famille: 'Avancé',
+    blocs: [
+      { type: 'onglets', libelle: 'Onglets', description: 'Regrouper du contenu par onglets.', motsCles: 'onglets tabs onglet panneau' },
+      { type: 'galerie', libelle: 'Galerie', description: 'Grille d’images.', motsCles: 'galerie images photos grille galerie' },
+      { type: 'graphique', libelle: 'Graphique', description: 'Diagramme en barres.', motsCles: 'graphique diagramme barres chart statistiques' },
+      { type: 'raccourci', libelle: 'Raccourci', description: 'Renvoi vers une page ou une adresse.', motsCles: 'raccourci shortcut renvoi lien rapide' },
     ],
   },
 ];

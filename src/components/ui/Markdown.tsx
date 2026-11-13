@@ -14,7 +14,31 @@ import { Fragment, type ReactNode } from 'react';
  */
 
 const INLINE =
-  /(\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`|\[[^\]]+\]\([^)\s]+\))/g;
+  /(\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\+\+[^+\n]+\+\+|==[^=\n]+==|\{[a-z-]+:[^}\n]+\}|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`|\[[^\]]+\]\([^)\s]+\))/g;
+
+/** Couleurs de texte disponibles via la syntaxe `{couleur:texte}`. */
+const COULEURS_TEXTE: Record<string, string> = {
+  rouge: '#e03e3e',
+  orange: '#d9730d',
+  jaune: '#dfab01',
+  vert: '#0f7b6c',
+  bleu: '#0b6e99',
+  violet: '#6940a5',
+  rose: '#ad1a72',
+  gris: '#787774',
+};
+
+/** Couleurs de fond disponibles via la syntaxe `{fond-couleur:texte}`. */
+const COULEURS_FOND: Record<string, string> = {
+  rouge: 'rgba(224, 62, 62, 0.22)',
+  orange: 'rgba(217, 115, 13, 0.22)',
+  jaune: 'rgba(223, 171, 1, 0.25)',
+  vert: 'rgba(15, 123, 108, 0.22)',
+  bleu: 'rgba(11, 110, 153, 0.22)',
+  violet: 'rgba(105, 64, 165, 0.22)',
+  rose: 'rgba(173, 26, 114, 0.22)',
+  gris: 'rgba(120, 119, 116, 0.22)',
+};
 
 const LIEN_SUR = /^(https?:\/\/|mailto:|\/|#)/i;
 
@@ -78,6 +102,46 @@ function rendreLigne(texte: string, cle: string): ReactNode[] {
         </del>
       );
     }
+    if (morceau.length > 4 && morceau.startsWith('++') && morceau.endsWith('++')) {
+      return (
+        <u key={k} className="underline underline-offset-2">
+          {rendreLigne(morceau.slice(2, -2), k)}
+        </u>
+      );
+    }
+    if (morceau.length > 4 && morceau.startsWith('==') && morceau.endsWith('==')) {
+      return (
+        <mark
+          key={k}
+          className="rounded px-0.5"
+          style={{ backgroundColor: 'rgba(255, 212, 0, 0.35)', color: 'inherit' }}
+        >
+          {rendreLigne(morceau.slice(2, -2), k)}
+        </mark>
+      );
+    }
+
+    // Couleur de texte `{couleur:texte}` et de fond `{fond-couleur:texte}`.
+    const couleur = /^\{([a-z-]+):([^}\n]+)\}$/.exec(morceau);
+    if (couleur) {
+      const [, cleCouleur, interieur] = couleur;
+      const surFond = cleCouleur.startsWith('fond-');
+      const nom = surFond ? cleCouleur.slice(5) : cleCouleur;
+      const valeur = (surFond ? COULEURS_FOND : COULEURS_TEXTE)[nom];
+      if (!valeur) return <Fragment key={k}>{rendreLigne(interieur, k)}</Fragment>;
+      return (
+        <span
+          key={k}
+          style={
+            surFond
+              ? { backgroundColor: valeur, borderRadius: '3px', padding: '0 2px' }
+              : { color: valeur }
+          }
+        >
+          {rendreLigne(interieur, k)}
+        </span>
+      );
+    }
     if (morceau.length > 2 && morceau.startsWith('`') && morceau.endsWith('`')) {
       return (
         <code
@@ -105,7 +169,7 @@ function rendreLigne(texte: string, cle: string): ReactNode[] {
         <a
           key={k}
           href={href}
-          className="text-sky-600 underline underline-offset-2 hover:no-underline dark:text-sky-400"
+          className="cursor-pointer rounded-[3px] font-medium text-sky-700 underline decoration-sky-400/60 decoration-1 underline-offset-2 transition-colors hover:bg-sky-500/10 hover:decoration-sky-500 dark:text-sky-300"
           {...(externe ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           {libelle}
@@ -370,4 +434,13 @@ function decouper(contenu: string): ReactNode[] {
 /** Affiche un texte Markdown sous forme de blocs React stylés. */
 export function Markdown({ contenu, className }: { contenu: string; className?: string }) {
   return <div className={className}>{decouper(contenu)}</div>;
+}
+
+/**
+ * Affiche un extrait Markdown « en ligne » (gras, italique, barré, code
+ * inline et liens) sans bloc englobant. Utilisé pour le rendu des blocs de
+ * l'éditeur lorsque ceux-ci ne sont pas en cours d'édition.
+ */
+export function MarkdownInline({ contenu }: { contenu: string }) {
+  return <>{rendreLigne(contenu, 'inline')}</>;
 }

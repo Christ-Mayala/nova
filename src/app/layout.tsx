@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { EnregistrementSW } from '@/components/pwa/EnregistrementSW';
 import { GuideInstallation } from '@/components/pwa/GuideInstallation';
 import { InviteInstallation } from '@/components/pwa/InviteInstallation';

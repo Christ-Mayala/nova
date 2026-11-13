@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { catalogueBlocs, iconeParTypeBloc, type EntreeCatalogueBloc } from '@/lib/icones';
 import type { TypeBloc } from '@/lib/types';
@@ -96,24 +97,75 @@ export function MenuSlash({
   );
 }
 
-/** Sélecteur « Transformer en » : liste des types de blocs disponibles. */
+/**
+ * Sélecteur « Transformer en » : liste complète des types de blocs, avec
+ * recherche instantanée et regroupement par famille pour rester lisible.
+ */
 export function MenuTransformer({ onChoisir }: { onChoisir: (type: TypeBloc) => void }) {
+  const [recherche, setRecherche] = useState('');
+
+  const groupes = useMemo(() => {
+    const terme = recherche.trim().toLowerCase();
+    if (!terme) return catalogueBlocs;
+    return catalogueBlocs
+      .map((groupe) => ({
+        ...groupe,
+        blocs: groupe.blocs.filter(
+          (bloc) =>
+            bloc.libelle.toLowerCase().includes(terme) ||
+            bloc.motsCles.toLowerCase().includes(terme)
+        ),
+      }))
+      .filter((groupe) => groupe.blocs.length > 0);
+  }, [recherche]);
+
+  const total = groupes.reduce((n, groupe) => n + groupe.blocs.length, 0);
+
   return (
-    <div className="flex flex-col">
-      {catalogueBlocs.map((groupe) => (
-        <div key={groupe.famille}>
-          <p className="px-2 py-1 text-xs font-medium texte-faible">{groupe.famille}</p>
-          {groupe.blocs.map((bloc) => {
-            const Icone = iconeParTypeBloc[bloc.type];
-            return (
-              <button key={bloc.type} type="button" className="menu-item" onClick={() => onChoisir(bloc.type)}>
-                <Icone className="h-4 w-4 shrink-0 texte-doux" />
-                <span className="truncate">{bloc.libelle}</span>
-              </button>
-            );
-          })}
-        </div>
-      ))}
+    <div className="flex w-full flex-col">
+      <div
+        className="sticky top-0 z-10 -mx-1.5 flex items-center gap-2 border-b px-3.5 py-2"
+        style={{ borderColor: 'var(--bordure)', backgroundColor: 'var(--fond)' }}
+      >
+        <Search className="h-3.5 w-3.5 shrink-0 texte-faible" />
+        <input
+          autoFocus
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher une transformation…"
+          className="w-full bg-transparent text-sm outline-none placeholder:text-[color:var(--texte-faible)]"
+        />
+      </div>
+      <div className="py-1">
+        {total === 0 ? (
+          <p className="px-3 py-2 text-sm texte-faible">Aucun type ne correspond.</p>
+        ) : (
+          groupes.map((groupe) => (
+            <div key={groupe.famille} className="mb-0.5">
+              <p className="px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide texte-faible">
+                {groupe.famille}
+              </p>
+              {groupe.blocs.map((bloc) => {
+                const Icone = iconeParTypeBloc[bloc.type];
+                return (
+                  <button
+                    key={bloc.type}
+                    type="button"
+                    className="menu-item items-start"
+                    onClick={() => onChoisir(bloc.type)}
+                  >
+                    <Icone className="mt-0.5 h-4 w-4 shrink-0 texte-doux" />
+                    <span className="min-w-0">
+                      <span className="block">{bloc.libelle}</span>
+                      <span className="block text-xs texte-faible">{bloc.description}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

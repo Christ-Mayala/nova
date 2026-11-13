@@ -3,7 +3,9 @@
 import {
   BookOpen,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
+  ChevronsUpDown,
   FileText,
   Languages,
   ListChecks,
@@ -99,7 +101,14 @@ export default function PageIA() {
   const [enCours, setEnCours] = useState(false);
   const [historique, setHistorique] = useState<RequeteIA[]>([]);
   const [chargement, setChargement] = useState(true);
+  /** Clés des groupes de l'historique repliés (page de contexte). */
+  const [groupesReplies, setGroupesReplies] = useState<string[]>([]);
   const zoneRef = useRef<HTMLTextAreaElement>(null);
+
+  /** Replie ou déplie un groupe de l'historique. */
+  const basculerGroupe = useCallback((cle: string) => {
+    setGroupesReplies((prec) => (prec.includes(cle) ? prec.filter((c) => c !== cle) : [...prec, cle]));
+  }, []);
 
   const typeActif = useMemo(() => TYPES.find((t) => t.valeur === type) || TYPES[0], [type]);
 
@@ -320,6 +329,24 @@ export default function PageIA() {
         <div className="mb-3 flex items-center gap-2">
           <ListChecks className="h-4 w-4 texte-faible" />
           <h2 className="text-sm font-semibold texte-doux">Historique</h2>
+          {groupes.length > 1 && (
+            <button
+              type="button"
+              onClick={() =>
+                setGroupesReplies(
+                  groupes.every((groupe) => groupesReplies.includes(groupe.cle))
+                    ? []
+                    : groupes.map((groupe) => groupe.cle)
+                )
+              }
+              className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-xs texte-doux hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              <ChevronsUpDown className="h-3.5 w-3.5" />
+              {groupes.every((groupe) => groupesReplies.includes(groupe.cle))
+                ? 'Tout déplier'
+                : 'Tout plier'}
+            </button>
+          )}
         </div>
 
         {chargement ? (
@@ -332,42 +359,58 @@ export default function PageIA() {
           />
         ) : (
           <div className="flex flex-col gap-6">
-            {groupes.map((groupe) => (
-              <section key={groupe.cle}>
-                <header className="mb-2 flex items-center gap-2">
-                  {groupe.page ? (
-                    <>
-                      <IconeDonnee
-                        icone={groupe.page.icone}
-                        repli={FileText}
-                        className="h-4 w-4 shrink-0 texte-doux"
+            {groupes.map((groupe) => {
+              const replie = groupesReplies.includes(groupe.cle);
+              return (
+                <section key={groupe.cle}>
+                  <header className="mb-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => basculerGroupe(groupe.cle)}
+                      aria-expanded={!replie}
+                      aria-label={replie ? 'Déplier la conversation' : 'Replier la conversation'}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded texte-doux hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <ChevronRight
+                        className={cn('h-4 w-4 transition-transform', !replie && 'rotate-90')}
                       />
-                      <Link href={lienPage(groupe.page)} className="truncate font-medium hover:underline">
-                        {groupe.page.titre || 'Sans titre'}
-                      </Link>
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 shrink-0 texte-faible" />
-                      <span className="texte-doux">Sans page de contexte</span>
-                    </>
+                    </button>
+                    {groupe.page ? (
+                      <>
+                        <IconeDonnee
+                          icone={groupe.page.icone}
+                          repli={FileText}
+                          className="h-4 w-4 shrink-0 texte-doux"
+                        />
+                        <Link href={lienPage(groupe.page)} className="truncate font-medium hover:underline">
+                          {groupe.page.titre || 'Sans titre'}
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 shrink-0 texte-faible" />
+                        <span className="texte-doux">Sans page de contexte</span>
+                      </>
+                    )}
+                    <span className="etiquette px-1.5 py-0.5 text-[11px]" style={{ backgroundColor: 'var(--fond-secondaire)' }}>
+                      {groupe.requetes.length}
+                    </span>
+                  </header>
+                  {!replie && (
+                    <ul className="flex flex-col gap-3">
+                      {groupe.requetes.map((requete) => (
+                        <LigneRequete
+                          key={requete._id}
+                          requete={requete}
+                          page={requete.pageId ? pageParId(requete.pageId) : undefined}
+                          onSupprimer={() => supprimer(requete)}
+                        />
+                      ))}
+                    </ul>
                   )}
-                  <span className="etiquette px-1.5 py-0.5 text-[11px]" style={{ backgroundColor: 'var(--fond-secondaire)' }}>
-                    {groupe.requetes.length}
-                  </span>
-                </header>
-                <ul className="flex flex-col gap-3">
-                  {groupe.requetes.map((requete) => (
-                    <LigneRequete
-                      key={requete._id}
-                      requete={requete}
-                      page={requete.pageId ? pageParId(requete.pageId) : undefined}
-                      onSupprimer={() => supprimer(requete)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
+                </section>
+              );
+            })}
           </div>
         )}
       </section>

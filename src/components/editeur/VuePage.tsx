@@ -4,6 +4,7 @@ import {
   Clock,
   ImagePlus,
   Loader2,
+  Lock,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -18,6 +19,7 @@ import {
   RotateCcw,
   Save,
   Table,
+  Unlock,
   Upload,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -28,6 +30,7 @@ import { VueBase } from '@/components/base/VueBase';
 import { PanneauCommentaires } from '@/components/editeur/PanneauCommentaires';
 import { PanneauPartage } from '@/components/editeur/PanneauPartage';
 import { EditeurBlocs } from '@/components/editeur/EditeurBlocs';
+import { FournisseurLectureSeule } from '@/components/editeur/BlocEditeur';
 import { ChampAuto } from '@/components/editeur/ChampAuto';
 import { BandeauErreur, Chargement } from '@/components/ui/Etats';
 import { InfoBulles } from '@/components/ui/InfoBulles';
@@ -50,15 +53,34 @@ import { lienPage } from '@/lib/navigation';
 import type { Base as BaseDonnees, Bloc, Page, VersionPage } from '@/lib/types';
 import { cn, formaterDateHeure, identifiantDe, nomUtilisateur } from '@/lib/utils';
 
-/** Couvertures proposées par défaut dans la modale. */
-const COUVERTURES_PROPOSEES = [
-  'trivida-strategie',
-  'trivida-equipe',
-  'trivida-finance',
-  'trivida-produit',
-  'trivida-operation',
-  'trivida-avenir',
-].map((graine) => `https://picsum.photos/seed/${graine}/1600/480`);
+/**
+ * Couvertures proposées par défaut dans la modale.
+ * Ce sont des dégradés CSS : ils s'affichent toujours (aucune connexion
+ * Internet ni image distante requise) et restent nets à toutes les tailles.
+ */
+const COUVERTURES_PROPOSEES: Array<{ nom: string; valeur: string }> = [
+  { nom: 'Aurore', valeur: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+  { nom: 'Océan', valeur: 'linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%)' },
+  { nom: 'Forêt', valeur: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
+  { nom: 'Crépuscule', valeur: 'linear-gradient(135deg, #ee9ca7 0%, #ffdde1 100%)' },
+  { nom: 'Sable', valeur: 'linear-gradient(135deg, #f12711 0%, #f5af19 100%)' },
+  { nom: 'Nuit', valeur: 'linear-gradient(135deg, #232526 0%, #414345 100%)' },
+  { nom: 'Pastel', valeur: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
+  { nom: 'Violet', valeur: 'linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%)' },
+  { nom: 'Corail', valeur: 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)' },
+];
+
+/** Une couverture est-elle un dégradé CSS (plutôt qu'une URL d'image) ? */
+function estDegrade(valeur?: string): boolean {
+  return Boolean(valeur && /^\s*(linear|radial|conic)-gradient\(/i.test(valeur));
+}
+
+/** Traduit l'alignement vertical en `object-position` CSS. */
+function positionImage(position?: Page['couverturePosition']): string {
+  if (position === 'haut') return 'top';
+  if (position === 'bas') return 'bottom';
+  return 'center';
+}
 
 /** Vue d'une page : en-tête (icône, couverture, titre), contenu et panneaux. */
 export function VuePage({ pageId }: { pageId: string }) {
@@ -88,7 +110,9 @@ export function VuePage({ pageId }: { pageId: string }) {
   const titreEnAttente = useRef<Partial<Page> | null>(null);
   const flushTitreRef = useRef<() => void>(() => undefined);
 
-  const lireSeulement = !peutEditer;
+  /** Page verrouillée : consultation seule, aucune modification possible. */
+  const verrouillee = Boolean(page?.verrouillee);
+  const lireSeulement = !peutEditer || verrouillee;
 
   // La recherche dans le contexte est gardée dans une réf : `charger` reste
   // ainsi stable entre deux rafraîchissements de l'arbre (une mise à jour de
@@ -393,6 +417,30 @@ export function VuePage({ pageId }: { pageId: string }) {
     }
   }, [peutEditer, page, toasts]);
 
+  /** Supprime la base (tableau) rattachée à la page. */
+  const supprimerBase = useCallback(async () => {
+    if (!peutEditer) {
+      toasts.erreur('Connexion requise');
+      return;
+    }
+    if (!base) return;
+    const ok = await confirmer({
+      titre: 'Supprimer ce tableau ?',
+      message:
+        'La base de données et ses éléments seront supprimés. Le texte et les autres blocs de la page sont conservés.',
+      libelleConfirmer: 'Supprimer le tableau',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await apiBases.supprimer(base._id);
+      setBase(null);
+      toasts.succes('Tableau supprimé');
+    } catch (e) {
+      toasts.erreur('Suppression impossible', e instanceof Error ? e.message : undefined);
+    }
+  }, [peutEditer, base, confirmer, toasts]);
+
   if (chargement || chargementDonnees) return <Chargement libelle="Chargement de la page…" />;
 
   if (erreur || !page) {
@@ -452,6 +500,22 @@ export function VuePage({ pageId }: { pageId: string }) {
               {pleineLargeur ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </InfoBulles>
+          {peutEditer && (
+            <InfoBulles contenu={verrouillee ? 'Déverrouiller la page' : 'Verrouiller la page (lecture seule)'}>
+              <button
+                type="button"
+                onClick={() => majPage({ verrouillee: !verrouillee })}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded hover:bg-black/5 dark:hover:bg-white/10',
+                  verrouillee ? 'text-amber-600 dark:text-amber-400' : 'texte-doux'
+                )}
+                aria-label={verrouillee ? 'Déverrouiller la page' : 'Verrouiller la page'}
+                aria-pressed={verrouillee}
+              >
+                {verrouillee ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+              </button>
+            </InfoBulles>
+          )}
           <InfoBulles contenu="Commentaires">
             <button
               type="button"
@@ -488,11 +552,16 @@ export function VuePage({ pageId }: { pageId: string }) {
             <MenuElement icone={Copy} onClick={dupliquerPage}>
               Dupliquer la page
             </MenuElement>
-            {!base && peutEditer && (
-              <MenuElement icone={Table} onClick={creerBase}>
-                Créer un tableau
-              </MenuElement>
-            )}
+            {peutEditer &&
+              (base ? (
+                <MenuElement icone={Trash2} onClick={supprimerBase}>
+                  Supprimer le tableau
+                </MenuElement>
+              ) : (
+                <MenuElement icone={Table} onClick={creerBase}>
+                  Créer un tableau
+                </MenuElement>
+              ))}
             <MenuElement icone={History} onClick={() => setHistoriqueOuvert(true)}>
               Historique de la page
             </MenuElement>
@@ -518,10 +587,25 @@ export function VuePage({ pageId }: { pageId: string }) {
             {page.couverture ? (
               <div
                 className="mt-2 h-40 w-full overflow-hidden rounded-lg"
-                style={{ backgroundColor: 'var(--fond-secondaire)' }}
+                style={{
+                  backgroundColor: 'var(--fond-secondaire)',
+                  backgroundImage: estDegrade(page.couverture) ? page.couverture : undefined,
+                }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={page.couverture} alt="" className="h-full w-full object-cover" />
+                {!estDegrade(page.couverture) && (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={page.couverture}
+                      alt=""
+                      className={cn(
+                        'h-full w-full',
+                        page.couvertureAjustement === 'contenir' ? 'object-contain' : 'object-cover'
+                      )}
+                      style={{ objectPosition: positionImage(page.couverturePosition) }}
+                    />
+                  </>
+                )}
                 {peutEditer && (
                   <div className="absolute right-2 top-4 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
@@ -578,10 +662,35 @@ export function VuePage({ pageId }: { pageId: string }) {
 
         {/* Contenu */}
         <div className={cn('mx-auto w-full px-10 pb-24 pt-4', pleineLargeur ? 'max-w-contenu-large' : 'max-w-contenu')}>
-          {base ? (
-            <VueBase base={base} />
-          ) : (
-            <EditeurBlocs key={cleEdition} pageId={page._id} onCreerBase={creerBase} />
+          {/* Le contenu de la page reste toujours visible : une base de données
+              rattachée s'affiche en complément, sans remplacer les blocs. */}
+          <FournisseurLectureSeule verrouille={lireSeulement}>
+            <EditeurBlocs
+              key={cleEdition}
+              pageId={page._id}
+              onCreerBase={creerBase}
+              lectureSeule={lireSeulement}
+            />
+          </FournisseurLectureSeule>
+
+          {base && (
+            <div className="mt-8">
+              <div className="mb-2 flex items-center gap-2">
+                <Table className="h-4 w-4 texte-faible" />
+                <h2 className="text-sm font-semibold texte-doux">{base.titre || 'Tableau'}</h2>
+                {peutEditer && (
+                  <button
+                    type="button"
+                    onClick={supprimerBase}
+                    className="ml-auto flex items-center gap-1.5 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Supprimer le tableau
+                  </button>
+                )}
+              </div>
+              <VueBase base={base} />
+            </div>
           )}
 
           <Retroliens pageId={page._id} />
@@ -698,8 +807,73 @@ export function VuePage({ pageId }: { pageId: string }) {
         <div className="flex flex-col gap-4">
           {page.couverture && (
             <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--bordure)' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={page.couverture} alt="" className="h-28 w-full object-cover" />
+              {estDegrade(page.couverture) ? (
+                <div className="h-28 w-full" style={{ backgroundImage: page.couverture }} />
+              ) : (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={page.couverture}
+                    alt=""
+                    className={cn(
+                      'h-28 w-full',
+                      page.couvertureAjustement === 'contenir' ? 'object-contain' : 'object-cover'
+                    )}
+                    style={{ objectPosition: positionImage(page.couverturePosition) }}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {page.couverture && !estDegrade(page.couverture) && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <span className="w-24 shrink-0 text-sm font-medium">Affichage</span>
+                <div className="flex gap-1 rounded-md p-0.5" style={{ backgroundColor: 'var(--survol)' }}>
+                  {(['remplir', 'contenir'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => majPage({ couvertureAjustement: mode })}
+                      className={cn(
+                        'rounded px-3 py-1 text-sm',
+                        (page.couvertureAjustement || 'remplir') === mode
+                          ? 'bg-white shadow-sm dark:bg-white/15'
+                          : 'texte-doux'
+                      )}
+                    >
+                      {mode === 'remplir' ? 'Remplir' : 'Image entière'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="w-24 shrink-0 text-sm font-medium">Alignement</span>
+                <div className="flex gap-1 rounded-md p-0.5" style={{ backgroundColor: 'var(--survol)' }}>
+                  {(
+                    [
+                      ['haut', 'Haut'],
+                      ['centre', 'Centre'],
+                      ['bas', 'Bas'],
+                    ] as const
+                  ).map(([valeur, libelle]) => (
+                    <button
+                      key={valeur}
+                      type="button"
+                      onClick={() => majPage({ couverturePosition: valeur })}
+                      className={cn(
+                        'rounded px-3 py-1 text-sm',
+                        (page.couverturePosition || 'centre') === valeur
+                          ? 'bg-white shadow-sm dark:bg-white/15'
+                          : 'texte-doux'
+                      )}
+                    >
+                      {libelle}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -758,17 +932,18 @@ export function VuePage({ pageId }: { pageId: string }) {
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">Suggestions</span>
             <div className="grid grid-cols-3 gap-2">
-              {COUVERTURES_PROPOSEES.map((url) => (
+              {COUVERTURES_PROPOSEES.map((modele) => (
                 <button
-                  key={url}
+                  key={modele.nom}
                   type="button"
-                  onClick={() => appliquerCouverture(url)}
-                  className="h-16 overflow-hidden rounded-md border transition-opacity hover:opacity-85"
-                  style={{ borderColor: 'var(--bordure)' }}
-                  aria-label="Utiliser cette couverture"
+                  onClick={() => appliquerCouverture(modele.valeur)}
+                  className="group relative h-16 overflow-hidden rounded-md border transition-opacity hover:opacity-90"
+                  style={{ borderColor: 'var(--bordure)', backgroundImage: modele.valeur }}
+                  aria-label={`Utiliser le dégradé ${modele.nom}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <span className="absolute inset-x-0 bottom-0 bg-black/35 px-1.5 py-0.5 text-left text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    {modele.nom}
+                  </span>
                 </button>
               ))}
             </div>

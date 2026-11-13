@@ -109,6 +109,10 @@ export interface Page extends BaseDRY {
   titre: string;
   icone?: string;
   couverture?: string;
+  /** « remplir » recadre l'image, « contenir » l'affiche entièrement. */
+  couvertureAjustement?: 'remplir' | 'contenir';
+  /** Alignement vertical de l'image de couverture. */
+  couverturePosition?: 'haut' | 'centre' | 'bas';
   espaceId?: Espace | string | null;
   /** Espace de travail auquel cette page appartient. */
   workspaceId?: Workspace | string | null;
@@ -116,6 +120,8 @@ export interface Page extends BaseDRY {
   ordre?: number;
   favori?: boolean;
   pleineLargeur?: boolean;
+  /** Page verrouillée : consultation seule (aucune modification possible). */
+  verrouillee?: boolean;
   publie?: boolean;
   section?: SectionPage;
   derniereVisite?: string;
@@ -131,6 +137,9 @@ export type TypeBloc =
   | 'titre_1'
   | 'titre_2'
   | 'titre_3'
+  | 'titre_4'
+  | 'titre_5'
+  | 'titre_6'
   | 'liste_a_puces'
   | 'liste_numerotee'
   | 'a_faire'
@@ -156,7 +165,11 @@ export type TypeBloc =
   | 'lien_page'
   | 'ia_resume'
   | 'ia_actions'
-  | 'note';
+  | 'note'
+  | 'onglets'
+  | 'galerie'
+  | 'graphique'
+  | 'raccourci';
 
 /** Propriétés libres d'un bloc (url, langage, coche, emoji, pageId...). */
 export interface ProprietesBloc {
