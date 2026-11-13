@@ -481,10 +481,18 @@ export const medias = {
 
 /**
  * Racine du proxy d'inférence IA. FreeLLM expose son API compatible OpenAI
- * à la racine du backend DRY (`/v1/...`), en dehors du préfixe multi-tenant ;
- * la réécriture Next la rend disponible en same-origin.
+ * à la racine du backend DRY (`/v1/...`), en dehors du préfixe multi-tenant.
+ *
+ * En développement, la réécriture Next la rend disponible en same-origin.
+ * En production, on appelle directement l'API DRY via `NEXT_PUBLIC_DRY_API_URL`
+ * comme le fait déjà le temps réel : le proxy serverless Netlify applique son
+ * propre plafond de temps et coupe les générations longues (l'agent ne recevait
+ * alors aucune réponse, quelle que soit la valeur de `proxyTimeout` de Next).
+ * Côté API, l'origine du site est déjà autorisée : c'est la même liste blanche
+ * que celle utilisée par Socket.IO.
  */
-const BASE_IA = '/v1';
+const API_DRY_DIRECTE = (process.env.NEXT_PUBLIC_DRY_API_URL || '').trim().replace(/\/$/, '');
+const BASE_IA = API_DRY_DIRECTE ? `${API_DRY_DIRECTE}/v1` : '/v1';
 
 /** Message d'un échange avec l'assistant. */
 export interface MessageIA {

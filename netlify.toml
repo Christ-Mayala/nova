@@ -25,6 +25,9 @@
   NPM_FLAGS = "--no-audit --no-fund"
   DRY_API_URL = "https://dryapi.onrender.com"
   NEXT_PUBLIC_SOCKET_URL = "https://dryapi.onrender.com"
+  # L'assistant IA est appelé directement depuis le navigateur (comme Socket.IO) :
+  # le proxy serverless Netlify coupe les générations longues.
+  NEXT_PUBLIC_DRY_API_URL = "https://dryapi.onrender.com"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
