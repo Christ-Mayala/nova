@@ -379,10 +379,14 @@ function messageContexte(contexte: ContexteAgent): string {
   }
   if (contexte.pageCourante) {
     lignes.push(`Page courante : « ${contexte.pageCourante.titre} »`);
+    // Plafond volontairement large : une page de travail courante dépasse vite
+    // quelques milliers de caractères (listes d'actions, plans…). À 4 000, le
+    // modèle ne voyait que le début de la page et traitait une partie seulement
+    // des actions demandées.
     const contenu = contexte.pageCourante.blocs
       .map((bloc) => `[${bloc.type}] ${bloc.contenu}`)
       .join('\n')
-      .slice(0, 4000);
+      .slice(0, 20000);
     if (contenu.trim()) lignes.push(`Contenu actuel de la page courante :\n${contenu}`);
   }
   return lignes.join('\n');
