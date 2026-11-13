@@ -32,6 +32,7 @@ import {
   Heading5,
   Heading6,
   Image as IconeImage,
+  Images,
   Kanban,
   LayoutGrid,
   LayoutPanelTop,
@@ -68,6 +69,7 @@ import {
   Type,
   UserRound,
   Video,
+  Wand2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -159,8 +161,10 @@ export const iconeParTypeBloc: Record<TypeBloc, LucideIcon> = {
   note: NotebookText,
   onglets: LayoutPanelTop,
   galerie: LayoutGrid,
+  galerie_medias: Images,
   graphique: BarChart3,
   raccourci: Link,
+  ia_page: Wand2,
 };
 
 /** Icônes vectorielles par type de propriété de base. */
@@ -253,8 +257,10 @@ export const libelleTypeBloc: Record<TypeBloc, string> = {
   note: 'Note',
   onglets: 'Onglets',
   galerie: 'Galerie',
+  galerie_medias: 'Galerie de médias',
   graphique: 'Graphique',
   raccourci: 'Raccourci',
+  ia_page: 'IA → page',
 };
 
 /** Libellés français des types de propriétés de base. */
@@ -343,6 +349,7 @@ export const catalogueBlocs: GroupeCatalogueBloc[] = [
       { type: 'fichier', libelle: 'Fichier', description: 'Joindre un fichier.', motsCles: 'fichier piece jointe upload' },
       { type: 'signet', libelle: 'Signet', description: 'Aperçu d’un lien.', motsCles: 'signet bookmark lien url' },
       { type: 'embed', libelle: 'Intégration', description: 'Intégrer un service externe.', motsCles: 'embed integration iframe figma loom' },
+      { type: 'galerie_medias', libelle: 'Galerie de médias', description: 'Grille d’images et de vidéos.', motsCles: 'galerie medias images videos photo film grille' },
     ],
   },
   {
@@ -373,6 +380,7 @@ export const catalogueBlocs: GroupeCatalogueBloc[] = [
       { type: 'bouton_modele', libelle: 'Bouton de modèle', description: 'Dupliquer un modèle en un clic.', motsCles: 'modele template bouton' },
       { type: 'ia_resume', libelle: 'Résumé IA', description: 'Résumé généré automatiquement.', motsCles: 'ia resume summary assistant' },
       { type: 'ia_actions', libelle: 'Actions IA', description: 'Extraire les actions à mener.', motsCles: 'ia actions taches assistant' },
+      { type: 'ia_page', libelle: 'IA → page', description: 'Demander à l’IA d’organiser et d’écrire dans la page.', motsCles: 'ia page ecrire generer organiser rendez-vous tableau plan' },
     ],
   },
   {

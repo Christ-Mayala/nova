@@ -167,6 +167,26 @@ export async function rafraichirJeton(): Promise<ResultatRafraichissement> {
 }
 
 /**
+ * Message d'erreur lisible : reprend le message du backend et y ajoute le
+ * détail des champs invalides (`errors`), sinon l'erreur reste muette.
+ */
+function messageErreur(
+  charge: { message?: string; errors?: unknown } | null,
+  statut: number
+): string {
+  const base = charge?.message || `Erreur ${statut}`;
+  const details = Array.isArray(charge?.errors) ? charge.errors : [];
+  const precis = details
+    .map((detail) => {
+      const champ = detail as { field?: string; message?: string };
+      return champ?.field ? `${champ.field} : ${champ.message ?? ''}` : champ?.message;
+    })
+    .filter((texte): texte is string => Boolean(texte))
+    .join(' · ');
+  return precis ? `${base} — ${precis}` : base;
+}
+
+/**
  * Exécute une requête vers l'API et normalise la réponse.
  * En cas de `401`, tente un renouvellement transparent du jeton et rejoue la
  * requête une seule fois avant d'abandonner (auquel cas la session est purgée).
@@ -229,8 +249,7 @@ export async function executer<T>(chemin: string, options: OptionsRequete = {}):
   }
 
   if (!reponse.ok || (charge && charge.success === false)) {
-    const message = charge?.message || `Erreur ${reponse.status}`;
-    throw new ErreurAPI(message, reponse.status, charge);
+    throw new ErreurAPI(messageErreur(charge, reponse.status), reponse.status, charge);
   }
 
   return charge as ReponseAPI<T>;
@@ -282,8 +301,7 @@ export async function executerFormulaire<T>(
   }
 
   if (!reponse.ok || (charge && charge.success === false)) {
-    const message = charge?.message || `Erreur ${reponse.status}`;
-    throw new ErreurAPI(message, reponse.status, charge);
+    throw new ErreurAPI(messageErreur(charge, reponse.status), reponse.status, charge);
   }
 
   return charge as ReponseAPI<T>;

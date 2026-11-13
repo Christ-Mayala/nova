@@ -396,6 +396,10 @@ export function VuePage({ pageId }: { pageId: string }) {
       toasts.erreur('Connexion requise');
       return;
     }
+    if (lireSeulement) {
+      toasts.erreur('Page verrouillée', 'Déverrouillez la page pour la modifier.');
+      return;
+    }
     if (!page) return;
     try {
       const cree = await apiBases.creer({
@@ -415,12 +419,16 @@ export function VuePage({ pageId }: { pageId: string }) {
     } catch (e) {
       toasts.erreur('Création impossible', e instanceof Error ? e.message : undefined);
     }
-  }, [peutEditer, page, toasts]);
+  }, [lireSeulement, peutEditer, page, toasts]);
 
   /** Supprime la base (tableau) rattachée à la page. */
   const supprimerBase = useCallback(async () => {
     if (!peutEditer) {
       toasts.erreur('Connexion requise');
+      return;
+    }
+    if (lireSeulement) {
+      toasts.erreur('Page verrouillée', 'Déverrouillez la page pour la modifier.');
       return;
     }
     if (!base) return;
@@ -439,7 +447,7 @@ export function VuePage({ pageId }: { pageId: string }) {
     } catch (e) {
       toasts.erreur('Suppression impossible', e instanceof Error ? e.message : undefined);
     }
-  }, [peutEditer, base, confirmer, toasts]);
+  }, [lireSeulement, peutEditer, base, confirmer, toasts]);
 
   if (chargement || chargementDonnees) return <Chargement libelle="Chargement de la page…" />;
 
@@ -678,7 +686,7 @@ export function VuePage({ pageId }: { pageId: string }) {
               <div className="mb-2 flex items-center gap-2">
                 <Table className="h-4 w-4 texte-faible" />
                 <h2 className="text-sm font-semibold texte-doux">{base.titre || 'Tableau'}</h2>
-                {peutEditer && (
+                {!lireSeulement && (
                   <button
                     type="button"
                     onClick={supprimerBase}

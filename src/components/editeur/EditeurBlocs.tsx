@@ -223,6 +223,25 @@ export function EditeurBlocs({
     };
   }, [pageId, reinitialiserHistorique]);
 
+  /**
+   * Recharge les blocs depuis le serveur. Utilisé après une écriture assistée
+   * par l'IA (bloc « IA → page ») : la liste affichée doit refléter
+   * immédiatement le contenu enregistré côté serveur.
+   */
+  const recharger = useCallback(async () => {
+    try {
+      const trouves = await listerTout(apiBlocs, { pageId, sort: 'ordre' });
+      const filtre = trouves
+        .filter((b) => b.pageId === pageId)
+        .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+      blocsRef.current = filtre;
+      setBlocs(filtre);
+      reinitialiserHistorique(filtre);
+    } catch {
+      /* Le contenu affiché reste inchangé si le rechargement échoue. */
+    }
+  }, [pageId, reinitialiserHistorique]);
+
   /** Envoie un bloc à l'API et met à jour l'indicateur d'enregistrement. */
   const sauvegarderBloc = useCallback(
     async (bloc: Bloc) => {
@@ -698,6 +717,7 @@ export function EditeurBlocs({
             if (precedent) setTimeout(() => focusBloc(precedent._id), 20);
           }}
           onCreerBase={onCreerBase}
+          onRechargerBlocs={recharger}
           enGlissement={blocGlisse === bloc._id}
           positionInsertion={insertion?.id === bloc._id ? insertion.position : null}
           onGlisserDebut={() => glisserDebut(bloc._id)}

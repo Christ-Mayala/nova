@@ -29,6 +29,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { ArbrePages } from '@/components/shell/ArbrePages';
+import { ModaleNouvellePage } from '@/components/shell/ModaleNouvellePage';
 import { IconeDonnee } from '@/components/ui/IconeDonnee';
 import { InfoBulles } from '@/components/ui/InfoBulles';
 import { Menu, MenuElement, MenuSeparateur, MenuTitre } from '@/components/ui/Menu';
@@ -37,7 +38,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useDonnees } from '@/context/DonneesContext';
 import { useInterface } from '@/context/InterfaceContext';
 import { useLangue } from '@/context/LangueContext';
-import { pages as apiPages } from '@/lib/api';
 import { ROUTES, lienPage } from '@/lib/navigation';
 import { estStandalone, lancerInstallation, ouvrirGuideInstallation } from '@/lib/pwa';
 import type { Espace } from '@/lib/types';
@@ -53,14 +53,14 @@ export function BarreLaterale() {
     largeurBarre,
     definirLargeurBarre,
   } = useInterface();
-  const { espaces, workspaceActif, rafraichir } = useDonnees();
+  const { espaces } = useDonnees();
   const { peutEditer } = useAuth();
   const { t } = useLangue();
   const toasts = useToasts();
   const chemin = usePathname();
-  const router = useRouter();
   const [redimension, setRedimension] = useState(false);
   const [installe, setInstalle] = useState(false);
+  const [nouvellePageOuverte, setNouvellePageOuverte] = useState(false);
   const refBarre = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -113,25 +113,13 @@ export function BarreLaterale() {
     };
   }, [redimension, definirLargeurBarre]);
 
-  async function nouvellePage() {
+  function nouvellePage() {
     if (!peutEditer) {
       toasts.erreur(t('barre.connexionRequise'), t('barre.reconnectez'));
       return;
     }
-    const premierEspace = espaces[0];
-    try {
-      const page = await apiPages.creer({
-        titre: t('barre.sansTitre'),
-        espaceId: premierEspace?._id,
-        workspaceId: workspaceActif?._id,
-        section: 'prive',
-        ordre: 0,
-      });
-      await rafraichir();
-      router.push(lienPage(page));
-    } catch (e) {
-      toasts.erreur(t('barre.creationImpossible'), e instanceof Error ? e.message : undefined);
-    }
+    fermerBarreMobile();
+    setNouvellePageOuverte(true);
   }
 
   const contenu = (
@@ -358,6 +346,11 @@ export function BarreLaterale() {
           </div>
         </div>
       )}
+
+      <ModaleNouvellePage
+        ouvert={nouvellePageOuverte}
+        onFermer={() => setNouvellePageOuverte(false)}
+      />
     </>
   );
 }

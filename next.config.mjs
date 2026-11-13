@@ -18,6 +18,14 @@ const nextConfig = {
   // Permet de construire dans un dossier séparé pendant qu'un serveur de
   // développement occupe `.next` (utile en local ; Netlify garde `.next`).
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  experimental: {
+    // Next.js coupe par défaut toute requête réécrite au bout de 30 s
+    // (`proxyTimeout: proxyTimeout || 30000` dans router-utils/proxy-request).
+    // Une génération du plan d'actions NOVA dure 30 à 60 s : le proxy tuait la
+    // connexion avant la réponse, l'agent ne recevait rien. On dépasse
+    // largement, le client abandonnant lui-même à 90 s.
+    proxyTimeout: 180_000,
+  },
   async rewrites() {
     return [
       {

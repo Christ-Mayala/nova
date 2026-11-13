@@ -24,7 +24,6 @@ import {
   PaintBucket,
   Palette,
   Paperclip,
-  Play,
   Plus,
   Sparkles,
   Strikethrough,
@@ -36,6 +35,7 @@ import {
 } from 'lucide-react';
 import katex from 'katex';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Highlight, themes } from 'prism-react-renderer';
 import {
   createContext,
@@ -53,6 +53,7 @@ import {
   EVENEMENT_FORMAT_CHAMP,
 } from '@/components/editeur/ChampAuto';
 import { filtrerCatalogue, MenuSlash, MenuTransformer } from '@/components/editeur/MenuSlash';
+import { ModaleAgentIA } from '@/components/editeur/ModaleAgentIA';
 import { IconeDonnee } from '@/components/ui/IconeDonnee';
 import { Menu, MenuElement, MenuSeparateur, MenuTitre } from '@/components/ui/Menu';
 import { Modale } from '@/components/ui/Modale';
@@ -61,6 +62,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useDonnees } from '@/context/DonneesContext';
 import { demanderIA, medias } from '@/lib/api';
 import { iconeParTypeBloc, libelleTypeBloc } from '@/lib/icones';
+import { construireContexteAgent, demanderPlanAgent, type PlanAgent } from '@/lib/iaAgent';
 import { lienEspace, lienPage } from '@/lib/navigation';
 import type { Bloc, Page, TypeBloc } from '@/lib/types';
 import { cn, identifiantDe } from '@/lib/utils';
@@ -86,6 +88,8 @@ interface ProprietesBlocEditeur {
   onFocusPrecedent: () => void;
   /** Crée une base de données rattachée à la page (bloc « base en ligne »). */
   onCreerBase?: () => void;
+  /** Recharge les blocs de la page (après une écriture assistée par l'IA). */
+  onRechargerBlocs?: () => void;
   /** Glisser-déposer : le bloc vient d'être saisi (début du déplacement). */
   onGlisserDebut?: () => void;
   /** Glisser-déposer : le curseur survole ce bloc, à la position indiquée. */
@@ -291,6 +295,7 @@ export function BlocEditeur({
   onDupliquer,
   onFocusPrecedent,
   onCreerBase,
+  onRechargerBlocs,
   onGlisserDebut,
   onGlisserSur,
   onGlisserFin,
@@ -656,6 +661,7 @@ export function BlocEditeur({
           onContenu={onContenu}
           onPropriete={onPropriete}
           onCreerBase={onCreerBase}
+          onRechargerBlocs={onRechargerBlocs}
         />
         {menuSlash.ouvert && (
           <MenuSlash
@@ -698,6 +704,7 @@ function RenduBloc({
   onContenu,
   onPropriete,
   onCreerBase,
+  onRechargerBlocs,
 }: {
   bloc: Bloc;
   texte: string;
@@ -709,6 +716,7 @@ function RenduBloc({
   onContenu: (valeur: string) => void;
   onPropriete: (cle: string, valeur: unknown) => void;
   onCreerBase?: () => void;
+  onRechargerBlocs?: () => void;
 }) {
   // Les blocs textuels utilisent le champ enrichi (aperçu Markdown + édition),
   // les autres restent sur la zone de texte simple.
@@ -855,7 +863,7 @@ function RenduBloc({
       return <BlocTableau bloc={bloc} onPropriete={onPropriete} />;
 
     case 'base_en_ligne':
-      return <BlocBaseEnLigne onCreerBase={onCreerBase} />;
+      return <BlocBaseEnLigne onCreerBase={verrouille ? undefined : onCreerBase} />;
 
     case 'note':
       return <BlocNote bloc={bloc} onContenu={onContenu} onPropriete={onPropriete} />;
@@ -866,6 +874,9 @@ function RenduBloc({
     case 'galerie':
       return <BlocGalerie bloc={bloc} onPropriete={onPropriete} />;
 
+    case 'galerie_medias':
+      return <BlocGalerieMedias bloc={bloc} onPropriete={onPropriete} />;
+
     case 'graphique':
       return <BlocGraphique bloc={bloc} onPropriete={onPropriete} />;
 
@@ -874,6 +885,9 @@ function RenduBloc({
 
     case 'lien_page':
       return <BlocLienPage bloc={bloc} onPropriete={onPropriete} />;
+
+    case 'ia_page':
+      return <BlocIaPage bloc={bloc} onContenu={onContenu} onRechargerBlocs={onRechargerBlocs} />;
 
     case 'ia_resume':
     case 'ia_actions':
@@ -915,6 +929,25 @@ function descriptionParType(type: TypeBloc): string {
 /** Extensions de fichiers lues directement par la balise `<video>` / `<audio>`. */
 const EXTENSIONS_VIDEO = /\.(mp4|webm|ogv|ogg|mov|m4v)(\?.*)?$/i;
 const EXTENSIONS_AUDIO = /\.(mp3|wav|ogg|oga|m4a|aac|flac)(\?.*)?$/i;
+const EXTENSIONS_IMAGE = /\.(png|jpe?g|gif|webp|avif|svg|bmp|tiff?)(\?.*)?$/i;
+
+/**
+ * Nature réelle d'un média déduite de son URL. Plus fiable que le type du
+ * bloc : un fichier vidéo importé dans un bloc « Image » (ou l'inverse) reste
+ * ainsi affiché avec le bon lecteur au lieu d'être ignoré.
+ */
+function natureMedia(url: string): 'video' | 'audio' | 'image' | null {
+  const propre = url.trim();
+  if (!propre) return null;
+  if (EXTENSIONS_VIDEO.test(propre)) return 'video';
+  if (EXTENSIONS_AUDIO.test(propre)) return 'audio';
+  if (EXTENSIONS_IMAGE.test(propre)) return 'image';
+  // Cloudinary peut livrer une URL sans extension : le segment de livraison
+  // (`/video/upload/`, `/image/upload/`) indique alors la nature du média.
+  if (/res\.cloudinary\.com\/[^/]+\/video\/upload\//i.test(propre)) return 'video';
+  if (/res\.cloudinary\.com\/[^/]+\/image\/upload\//i.test(propre)) return 'image';
+  return null;
+}
 
 /**
  * Convertit l'URL d'un service connu en URL intégrable dans une `iframe`
@@ -1182,11 +1215,22 @@ function BlocMedia({
 }) {
   const url = String(bloc.proprietes?.url || '');
   const legende = String(bloc.proprietes?.legende || '');
+  const nature = natureMedia(url);
+  const integrable = urlIntegrable(url);
+  // Un bloc « Vidéo » montre toujours un lecteur, sauf s'il s'agit d'une
+  // plateforme d'intégration (YouTube, Vimeo…). Une URL sans extension connue
+  // n'empêche donc plus l'affichage de la vidéo.
+  const estVideo = nature === 'video' || (bloc.type === 'video' && !integrable);
+  const peutEditer = !useLectureSeule();
   const Icone = iconeParTypeBloc[bloc.type];
   const { erreur: afficherErreur, succes: afficherSucces } = useToasts();
   const refFichier = useRef<HTMLInputElement>(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const importable = TYPES_IMPORTABLES.includes(bloc.type);
+  // Renseigné quand le navigateur ne parvient pas à lire le média (codec,
+  // accès Cloudinary restreint…) : on propose alors un lien d'ouverture.
+  const [lectureKO, setLectureKO] = useState(false);
+  useEffect(() => setLectureKO(false), [url]);
+  const importable = peutEditer && TYPES_IMPORTABLES.includes(bloc.type);
   const libelles: Partial<Record<TypeBloc, string>> = {
     image: 'Coller l’URL d’une image',
     video: 'Coller l’URL d’une vidéo (YouTube, Vimeo…)',
@@ -1227,6 +1271,7 @@ function BlocMedia({
           <input
             value={url}
             onChange={(e) => onPropriete('url', e.target.value)}
+            readOnly={!peutEditer}
             placeholder={libelles[bloc.type] || 'URL'}
             className="w-full bg-transparent text-sm outline-none placeholder:texte-faible"
           />
@@ -1257,7 +1302,19 @@ function BlocMedia({
         )}
       </div>
 
-      {url && bloc.type === 'image' && (
+      {url && estVideo && (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video
+          controls
+          preload="metadata"
+          playsInline
+          src={url}
+          onError={() => setLectureKO(true)}
+          className="mt-3 max-h-96 w-full rounded bg-black"
+        />
+      )}
+
+      {url && bloc.type === 'image' && !estVideo && nature !== 'audio' && (
         <div className="mt-3 overflow-hidden rounded">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={legende || 'Image'} className="max-h-96 w-full object-contain" />
@@ -1276,37 +1333,38 @@ function BlocMedia({
         </a>
       )}
 
-      {url && bloc.type === 'audio' && (
+      {url && nature === 'audio' && (
         // eslint-disable-next-line jsx-a11y/media-has-caption
-        <audio controls src={url} className="mt-3 w-full" />
+        <audio controls src={url} onError={() => setLectureKO(true)} className="mt-3 w-full" />
       )}
 
       {url &&
         bloc.type === 'video' &&
-        (EXTENSIONS_VIDEO.test(url) ? (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video controls src={url} className="mt-3 w-full rounded" />
-        ) : urlIntegrable(url) ? (
+        !estVideo &&
+        integrable && (
           <div className="mt-3 aspect-video w-full overflow-hidden rounded">
             <iframe
-              src={urlIntegrable(url) as string}
+              src={integrable}
               title={legende || 'Vidéo intégrée'}
               className="h-full w-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
           </div>
-        ) : (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 flex items-center gap-1.5 text-sm texte-doux underline"
-          >
-            <Play className="h-3.5 w-3.5" />
-            Ouvrir la vidéo
-          </a>
-        ))}
+        )}
+
+      {/* Repli si le média ne peut pas être lu dans la page. */}
+      {url && estVideo && lectureKO && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 flex items-center gap-1.5 text-xs texte-doux underline"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Lecture impossible dans la page — ouvrir la vidéo
+        </a>
+      )}
 
       {url &&
         bloc.type === 'embed' &&
@@ -1349,6 +1407,7 @@ function BlocMedia({
       <input
         value={legende}
         onChange={(e) => onPropriete('legende', e.target.value)}
+        readOnly={!peutEditer}
         placeholder="Ajouter une légende…"
         className="mt-2 w-full bg-transparent text-xs outline-none placeholder:texte-faible texte-doux"
       />
@@ -1783,6 +1842,142 @@ function BlocGalerie({
   );
 }
 
+/** Types de fichiers acceptés par la galerie de médias. */
+const MEDIAS_GALERIE = 'image/*,video/*';
+
+/**
+ * Bloc « Galerie de médias » : grille d'images **et** de vidéos. Contrairement
+ * au bloc « Galerie » (images uniquement, où une vidéo apparaîtrait cassée),
+ * chaque élément est affiché selon sa nature réelle (lecteur vidéo ou image).
+ */
+function BlocGalerieMedias({
+  bloc,
+  onPropriete,
+}: {
+  bloc: Bloc;
+  onPropriete: (cle: string, valeur: unknown) => void;
+}) {
+  const peutEditer = !useLectureSeule();
+  const { erreur: afficherErreur, succes: afficherSucces } = useToasts();
+  const [url, setUrl] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const refFichier = useRef<HTMLInputElement>(null);
+
+  const elements = Array.isArray(bloc.proprietes?.medias)
+    ? (bloc.proprietes.medias as unknown[]).map((valeur) => String(valeur ?? '')).filter(Boolean)
+    : [];
+
+  const enregistrer = (suite: string[]) => onPropriete('medias', suite);
+
+  const ajouter = () => {
+    const propre = url.trim();
+    if (!propre) return;
+    enregistrer([...elements, propre]);
+    setUrl('');
+  };
+
+  const televerser = async (fichier: File | undefined) => {
+    if (!fichier || envoi) return;
+    setEnvoi(true);
+    try {
+      const reponse = await medias.televerser(fichier);
+      const urlTeleversee = reponse.data?.url;
+      if (!urlTeleversee) throw new Error('Le serveur n’a renvoyé aucune URL.');
+      enregistrer([...elements, urlTeleversee]);
+      afficherSucces('Média ajouté', fichier.name);
+    } catch (e) {
+      afficherErreur('Import impossible', e instanceof Error ? e.message : undefined);
+    } finally {
+      setEnvoi(false);
+      if (refFichier.current) refFichier.current.value = '';
+    }
+  };
+
+  return (
+    <div className="my-1 rounded-lg border p-3" style={{ borderColor: 'var(--bordure)' }}>
+      {elements.length === 0 ? (
+        <p className="mb-3 text-sm texte-faible">
+          Aucun média pour l’instant. Ajoutez une adresse ou importez des images et des vidéos ci-dessous.
+        </p>
+      ) : (
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {elements.map((element, i) => (
+            <div
+              key={`${element}-${i}`}
+              className="group/media relative overflow-hidden rounded-md border"
+              style={{ borderColor: 'var(--bordure)' }}
+            >
+              {natureMedia(element) === 'video' ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video
+                  controls
+                  preload="metadata"
+                  playsInline
+                  src={element}
+                  className="h-28 w-full bg-black object-contain"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={element} alt="" className="h-28 w-full object-cover" />
+              )}
+              {peutEditer && (
+                <button
+                  type="button"
+                  onClick={() => enregistrer(elements.filter((_, j) => j !== i))}
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-black/55 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover/media:opacity-100"
+                  aria-label="Retirer ce média"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {peutEditer && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                ajouter();
+              }
+            }}
+            placeholder="Coller l’URL d’une image ou d’une vidéo…"
+            className="champ min-w-0 flex-1"
+          />
+          <button type="button" onClick={ajouter} disabled={!url.trim()} className="bouton shrink-0 text-xs">
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter
+          </button>
+          <button
+            type="button"
+            onClick={() => refFichier.current?.click()}
+            disabled={envoi}
+            className="bouton shrink-0 gap-1.5 text-xs"
+          >
+            {envoi ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {envoi ? 'Import…' : 'Importer'}
+          </button>
+          <input
+            ref={refFichier}
+            type="file"
+            accept={MEDIAS_GALERIE}
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              Array.from(e.target.files ?? []).forEach((fichier) => void televerser(fichier));
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Normalise les données d'un graphique ({ label, valeur }). */
 function normaliserDonnees(valeur: unknown): Array<{ label: string; valeur: number }> {
   if (Array.isArray(valeur) && valeur.length > 0) {
@@ -2009,6 +2204,7 @@ function BlocNote({
   onContenu: (valeur: string) => void;
   onPropriete: (cle: string, valeur: unknown) => void;
 }) {
+  const peutEditer = !useLectureSeule();
   const Icone = iconeParTypeBloc.note;
   const titre = String(bloc.proprietes?.titre || '');
   return (
@@ -2022,6 +2218,7 @@ function BlocNote({
           valeur={titre}
           onChange={(valeur) => onPropriete('titre', valeur)}
           data-bloc={bloc._id}
+          readOnly={!peutEditer}
           placeholder="Titre de la note"
           className="font-semibold"
         />
@@ -2029,6 +2226,7 @@ function BlocNote({
       <ChampAuto
         valeur={bloc.contenu || ''}
         onChange={onContenu}
+        readOnly={!peutEditer}
         placeholder="Écrivez votre note…"
         className="text-sm leading-relaxed texte-doux"
       />
@@ -2126,6 +2324,7 @@ function BlocLienPage({
   onPropriete: (cle: string, valeur: unknown) => void;
 }) {
   const { pages, pageParId } = useDonnees();
+  const peutEditer = !useLectureSeule();
   const [ouvert, setOuvert] = useState(false);
   const [requete, setRequete] = useState('');
 
@@ -2149,11 +2348,18 @@ function BlocLienPage({
             <IconeDonnee icone={cible.icone} repli={FileText} className="h-4 w-4 shrink-0 texte-doux" />
             <span className="truncate font-medium">{cible.titre || 'Sans titre'}</span>
           </Link>
-          <button type="button" onClick={() => setOuvert(true)} className="shrink-0 text-xs texte-faible hover:underline">
+          <button
+            type="button"
+            onClick={() => peutEditer && setOuvert(true)}
+            className={cn(
+              'shrink-0 text-xs texte-faible',
+              peutEditer ? 'hover:underline' : 'pointer-events-none opacity-0'
+            )}
+          >
             Changer
           </button>
         </div>
-      ) : (
+      ) : peutEditer ? (
         <button
           type="button"
           onClick={() => setOuvert(true)}
@@ -2163,6 +2369,11 @@ function BlocLienPage({
           <FileText className="h-4 w-4" />
           Choisir une page à référencer
         </button>
+      ) : (
+        <span className="flex items-center gap-2 px-1 py-1 text-sm texte-faible">
+          <FileText className="h-4 w-4" />
+          Aucune page référencée
+        </span>
       )}
 
       <Modale
@@ -2211,32 +2422,35 @@ function BlocColonnes({
   bloc: Bloc;
   onPropriete: (cle: string, valeur: unknown) => void;
 }) {
+  const peutEditer = !useLectureSeule();
   const nb = Math.min(5, Math.max(2, Number(bloc.proprietes?.colonnes) || 2));
 
   return (
     <div className="py-1">
-      <div className="mb-1.5 flex items-center gap-1.5">
-        <Columns3 className="h-3.5 w-3.5 texte-faible" />
-        <span className="text-xs texte-faible">Colonnes</span>
-        <div className="flex items-center gap-0.5">
-          {[2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onPropriete('colonnes', n)}
-              className={cn(
-                'h-5 w-5 rounded text-xs',
-                n === nb
-                  ? 'lien-barre-actif'
-                  : 'texte-doux hover:bg-black/5 dark:hover:bg-white/10'
-              )}
-              aria-label={`${n} colonnes`}
-            >
-              {n}
-            </button>
-          ))}
+      {peutEditer && (
+        <div className="mb-1.5 flex items-center gap-1.5">
+          <Columns3 className="h-3.5 w-3.5 texte-faible" />
+          <span className="text-xs texte-faible">Colonnes</span>
+          <div className="flex items-center gap-0.5">
+            {[2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => onPropriete('colonnes', n)}
+                className={cn(
+                  'h-5 w-5 rounded text-xs',
+                  n === nb
+                    ? 'lien-barre-actif'
+                    : 'texte-doux hover:bg-black/5 dark:hover:bg-white/10'
+                )}
+                aria-label={`${n} colonnes`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${nb}, minmax(0, 1fr))` }}>
         {Array.from({ length: nb }).map((_, index) => (
           <div
@@ -2326,3 +2540,117 @@ function BlocIA({
     </div>
   );
 }
+
+/**
+ * Bloc « Agent NOVA » : NOVA lit la page courante et l'espace (pages, bases),
+ * puis propose un plan d'actions — créer des pages et sous-pages, une base, un
+ * rendez-vous ou une tâche, réécrire du contenu — validé dans la modale avant
+ * application. Toute modification d'une page existante est précédée d'une
+ * version de sauvegarde.
+ */
+function BlocIaPage({
+  bloc,
+  onContenu,
+  onRechargerBlocs,
+}: {
+  bloc: Bloc;
+  onContenu: (valeur: string) => void;
+  onRechargerBlocs?: () => void;
+}) {
+  const peutEditer = !useLectureSeule();
+  const toasts = useToasts();
+  const router = useRouter();
+  const { pages } = useDonnees();
+  const [instruction, setInstruction] = useState(bloc.contenu || '');
+  const [enCours, setEnCours] = useState(false);
+  const [plan, setPlan] = useState<PlanAgent | null>(null);
+  const [ouvert, setOuvert] = useState(false);
+  const Icone = iconeParTypeBloc.ia_page;
+
+  useEffect(() => {
+    setInstruction(bloc.contenu || '');
+  }, [bloc.contenu]);
+
+  const generer = async (demandeForcee?: string) => {
+    const demande = (demandeForcee ?? instruction).trim();
+    if (!demande) {
+      toasts.erreur('Décrivez ce que NOVA doit faire');
+      return;
+    }
+    setEnCours(true);
+    try {
+      const contexte = await construireContexteAgent({ pages, pageCouranteId: bloc.pageId });
+      const proposition = await demanderPlanAgent(demande, contexte);
+      if (proposition.actions.length === 0) {
+        throw new Error("NOVA n'a proposé aucune action.");
+      }
+      setPlan(proposition);
+      setOuvert(true);
+    } catch (e) {
+      toasts.erreur('Génération impossible', e instanceof Error ? e.message : undefined);
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-md border p-3"
+      style={{ borderColor: 'var(--bordure)', backgroundColor: 'var(--fond-secondaire)' }}
+    >
+      <div className="flex items-center gap-2">
+        <Icone className="h-4 w-4 shrink-0 texte-doux" />
+        <span className="text-sm font-medium">Agent NOVA</span>
+        {peutEditer && (
+          <button
+            type="button"
+            onClick={() => generer()}
+            disabled={enCours}
+            className="bouton ml-auto text-xs"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {enCours ? 'Génération…' : 'Proposer des actions'}
+          </button>
+        )}
+      </div>
+
+      {peutEditer ? (
+        <textarea
+          value={instruction}
+          onChange={(e) => {
+            setInstruction(e.target.value);
+            onContenu(e.target.value);
+          }}
+          placeholder="Décrivez ce que NOVA doit faire : créer une page, un rendez-vous, une base, réécrire cette page…"
+          className="champ mt-2 min-h-[64px] resize-y"
+        />
+      ) : (
+        instruction && <p className="mt-2 whitespace-pre-wrap text-sm texte-doux">{instruction}</p>
+      )}
+
+      <p className="mt-1.5 text-xs texte-faible">
+        NOVA lit la page et l’espace de travail (pages, bases), puis propose des actions — créer des pages et des
+        sous-pages, une base, un rendez-vous, une tâche, réécrire du contenu — que vous validez avant application
+        (sauvegarde préalable en cas de modification).
+      </p>
+
+      <ModaleAgentIA
+        ouvert={ouvert}
+        plan={plan}
+        onFermer={() => setOuvert(false)}
+        onRelancer={(demande) => {
+          setOuvert(false);
+          generer(demande);
+        }}
+        onApplique={(resultat) => {
+          if (resultat.premierePageId && resultat.premierePageId !== bloc.pageId) {
+            router.push(`/page/${resultat.premierePageId}`);
+            return;
+          }
+          onRechargerBlocs?.();
+        }}
+      />
+    </div>
+  );
+}
+

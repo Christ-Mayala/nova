@@ -168,8 +168,10 @@ export type TypeBloc =
   | 'note'
   | 'onglets'
   | 'galerie'
+  | 'galerie_medias'
   | 'graphique'
-  | 'raccourci';
+  | 'raccourci'
+  | 'ia_page';
 
 /** Propriétés libres d'un bloc (url, langage, coche, emoji, pageId...). */
 export interface ProprietesBloc {
@@ -460,7 +462,13 @@ export interface Publication extends BaseDRY {
 /* Requête IA                                                           */
 /* ------------------------------------------------------------------ */
 
-export type TypeRequeteIA = 'question' | 'redaction' | 'resume' | 'traduction' | 'autoremplissage';
+export type TypeRequeteIA =
+  | 'question'
+  | 'redaction'
+  | 'resume'
+  | 'traduction'
+  | 'autoremplissage'
+  | 'agent';
 
 export interface SourceIA {
   titre?: string;

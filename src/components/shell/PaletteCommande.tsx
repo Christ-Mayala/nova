@@ -18,12 +18,13 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ModaleNouvellePage } from '@/components/shell/ModaleNouvellePage';
 import { IconeDonnee } from '@/components/ui/IconeDonnee';
 import { useToasts } from '@/components/ui/Toasts';
 import { useAuth } from '@/context/AuthContext';
 import { useDonnees } from '@/context/DonneesContext';
 import { useInterface } from '@/context/InterfaceContext';
-import { pages as apiPages, rechercherGlobalement, type ResultatRecherche } from '@/lib/api';
+import { rechercherGlobalement, type ResultatRecherche } from '@/lib/api';
 import { ROUTES, lienPage } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +38,7 @@ interface ActionRapide {
 /** Palette de commandes universelle (⌘K / Ctrl+K) : recherche + actions rapides. */
 export function PaletteCommande() {
   const { paletteOuverte, fermerPalette } = useInterface();
-  const { pageParId, rafraichir, espaces, workspaceActif } = useDonnees();
+  const { pageParId } = useDonnees();
   const { peutEditer } = useAuth();
   const toasts = useToasts();
   const router = useRouter();
@@ -46,6 +47,8 @@ export function PaletteCommande() {
   const [resultats, setResultats] = useState<ResultatRecherche[]>([]);
   const [chargement, setChargement] = useState(false);
   const [indexActif, setIndexActif] = useState(0);
+  const [nouvellePageOuverte, setNouvellePageOuverte] = useState(false);
+  const [titreNouvellePage, setTitreNouvellePage] = useState('');
   const refEntree = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -86,25 +89,16 @@ export function PaletteCommande() {
     return () => clearTimeout(minuteur);
   }, [terme, paletteOuverte]);
 
-  const creerPage = useCallback(async () => {
+  // La création demande d'abord la destination : on mémorise le titre saisi dans
+  // la palette puis on ouvre la boîte de dialogue dédiée.
+  const creerPage = useCallback(() => {
     if (!peutEditer) {
       toasts.erreur('Connexion requise');
       return;
     }
-    try {
-      const page = await apiPages.creer({
-        titre: terme.trim() || 'Sans titre',
-        espaceId: espaces[0]?._id,
-        workspaceId: workspaceActif?._id,
-        section: 'prive',
-      });
-      await rafraichir();
-      fermerPalette();
-      router.push(lienPage(page));
-    } catch (e) {
-      toasts.erreur('Création impossible', e instanceof Error ? e.message : undefined);
-    }
-  }, [terme, espaces, workspaceActif, peutEditer, rafraichir, fermerPalette, router, toasts]);
+    setTitreNouvellePage(terme.trim());
+    setNouvellePageOuverte(true);
+  }, [terme, peutEditer, toasts]);
 
   const actions = useMemo<ActionRapide[]>(
     () => [
@@ -179,101 +173,113 @@ export function PaletteCommande() {
     }
   };
 
-  if (!paletteOuverte) return null;
+  const modaleNouvellePage = (
+    <ModaleNouvellePage
+      ouvert={nouvellePageOuverte}
+      onFermer={() => setNouvellePageOuverte(false)}
+      titreInitial={titreNouvellePage}
+    />
+  );
+
+  if (!paletteOuverte) return modaleNouvellePage;
 
   return (
-    <div className="fixed inset-0 z-[75] flex items-start justify-center p-4 pt-[10vh]">
-      <button
-        type="button"
-        aria-label="Fermer la palette de commandes"
-        className="absolute inset-0 cursor-default bg-black/40"
-        onClick={fermerPalette}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Palette de commandes"
-        className="relative z-10 flex max-h-[70vh] w-full max-w-2xl animate-apparition flex-col overflow-hidden rounded-xl shadow-2xl"
-        style={{ backgroundColor: 'var(--fond)', border: '1px solid var(--bordure)' }}
-      >
-        <div className="flex items-center gap-2 border-b px-3 py-2.5" style={{ borderColor: 'var(--bordure)' }}>
-          <Search className="h-4 w-4 shrink-0 texte-faible" />
-          <input
-            ref={refEntree}
-            value={terme}
-            onChange={(e) => setTerme(e.target.value)}
-            onKeyDown={surTouche}
-            placeholder="Rechercher des pages, blocs, éléments ou lancer une action…"
-            className="w-full bg-transparent text-sm outline-none placeholder:texte-faible"
-          />
-          {chargement && <Loader2 className="h-4 w-4 shrink-0 animate-spin texte-faible" />}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-1.5 defilement-fin">
-          {actionsFiltrees.length > 0 && (
-            <div className="mb-1">
-              <p className="px-2 py-1 text-xs font-medium texte-faible">Actions rapides</p>
-              {actionsFiltrees.map((action, index) => (
-                <BoutonResultat
-                  key={action.id}
-                  actif={indexActif === index}
-                  icone={action.icone}
-                  titre={action.libelle}
-                  onSurvol={() => setIndexActif(index)}
-                  onClick={() => {
-                    fermerPalette();
-                    action.executer();
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          {resultats.length > 0 && (
-            <div>
-              <p className="px-2 py-1 text-xs font-medium texte-faible">Résultats</p>
-              {resultats.map((resultat, index) => {
-                const position = totalActions + index;
-                return (
-                  <BoutonResultat
-                    key={`${resultat.type}-${resultat.id}`}
-                    actif={indexActif === position}
-                    icone={resultat.type === 'element' ? Table : resultat.type === 'bloc' ? Hash : FileText}
-                    titre={resultat.titre}
-                    iconeDonnee={resultat.type === 'page' ? resultat.icone : undefined}
-                    extrait={resultat.extrait}
-                    onSurvol={() => setIndexActif(position)}
-                    onClick={() => ouvrirResultat(resultat)}
-                  />
-                );
-              })}
-            </div>
-          )}
-
-          {total === 0 && !chargement && terme.trim() && (
-            <p className="px-3 py-8 text-center text-sm texte-doux">
-              Aucun résultat pour « {terme.trim()} »
-            </p>
-          )}
-          {total === 0 && !terme.trim() && (
-            <p className="px-3 py-6 text-center text-xs texte-faible">
-              Astuce : tapez pour rechercher dans tout l’espace de travail.
-            </p>
-          )}
-        </div>
-
+    <>
+      <div className="fixed inset-0 z-[75] flex items-start justify-center p-4 pt-[10vh]">
+        <button
+          type="button"
+          aria-label="Fermer la palette de commandes"
+          className="absolute inset-0 cursor-default bg-black/40"
+          onClick={fermerPalette}
+        />
         <div
-          className="flex items-center gap-4 px-3 py-2 text-xs texte-faible"
-          style={{ borderTop: '1px solid var(--bordure)', backgroundColor: 'var(--fond-secondaire)' }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Palette de commandes"
+          className="relative z-10 flex max-h-[70vh] w-full max-w-2xl animate-apparition flex-col overflow-hidden rounded-xl shadow-2xl"
+          style={{ backgroundColor: 'var(--fond)', border: '1px solid var(--bordure)' }}
         >
-          <span className="flex items-center gap-1">
-            <CornerDownLeft className="h-3 w-3" /> pour ouvrir
-          </span>
-          <span>↑ ↓ pour naviguer</span>
-          <span>Échap pour fermer</span>
+          <div className="flex items-center gap-2 border-b px-3 py-2.5" style={{ borderColor: 'var(--bordure)' }}>
+            <Search className="h-4 w-4 shrink-0 texte-faible" />
+            <input
+              ref={refEntree}
+              value={terme}
+              onChange={(e) => setTerme(e.target.value)}
+              onKeyDown={surTouche}
+              placeholder="Rechercher des pages, blocs, éléments ou lancer une action…"
+              className="w-full bg-transparent text-sm outline-none placeholder:texte-faible"
+            />
+            {chargement && <Loader2 className="h-4 w-4 shrink-0 animate-spin texte-faible" />}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-1.5 defilement-fin">
+            {actionsFiltrees.length > 0 && (
+              <div className="mb-1">
+                <p className="px-2 py-1 text-xs font-medium texte-faible">Actions rapides</p>
+                {actionsFiltrees.map((action, index) => (
+                  <BoutonResultat
+                    key={action.id}
+                    actif={indexActif === index}
+                    icone={action.icone}
+                    titre={action.libelle}
+                    onSurvol={() => setIndexActif(index)}
+                    onClick={() => {
+                      fermerPalette();
+                      action.executer();
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {resultats.length > 0 && (
+              <div>
+                <p className="px-2 py-1 text-xs font-medium texte-faible">Résultats</p>
+                {resultats.map((resultat, index) => {
+                  const position = totalActions + index;
+                  return (
+                    <BoutonResultat
+                      key={`${resultat.type}-${resultat.id}`}
+                      actif={indexActif === position}
+                      icone={resultat.type === 'element' ? Table : resultat.type === 'bloc' ? Hash : FileText}
+                      titre={resultat.titre}
+                      iconeDonnee={resultat.type === 'page' ? resultat.icone : undefined}
+                      extrait={resultat.extrait}
+                      onSurvol={() => setIndexActif(position)}
+                      onClick={() => ouvrirResultat(resultat)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {total === 0 && !chargement && terme.trim() && (
+              <p className="px-3 py-8 text-center text-sm texte-doux">
+                Aucun résultat pour « {terme.trim()} »
+              </p>
+            )}
+            {total === 0 && !terme.trim() && (
+              <p className="px-3 py-6 text-center text-xs texte-faible">
+                Astuce : tapez pour rechercher dans tout l’espace de travail.
+              </p>
+            )}
+          </div>
+
+          <div
+            className="flex items-center gap-4 px-3 py-2 text-xs texte-faible"
+            style={{ borderTop: '1px solid var(--bordure)', backgroundColor: 'var(--fond-secondaire)' }}
+          >
+            <span className="flex items-center gap-1">
+              <CornerDownLeft className="h-3 w-3" /> pour ouvrir
+            </span>
+            <span>↑ ↓ pour naviguer</span>
+            <span>Échap pour fermer</span>
+          </div>
         </div>
       </div>
-    </div>
+
+      {modaleNouvellePage}
+    </>
   );
 }
 
