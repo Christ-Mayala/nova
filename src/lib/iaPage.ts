@@ -450,6 +450,8 @@ export async function appliquerPlanIA(params: {
   espaceId?: string;
   workspaceId?: string;
   parentId?: string | null;
+  /** Section de la nouvelle page ; héritée du parent, « prive » par défaut. */
+  section?: Page['section'];
   auteurNom?: string | null;
 }): Promise<ResultatPlanIA> {
   const blocs = params.blocs.filter(
@@ -463,7 +465,7 @@ export async function appliquerPlanIA(params: {
       espaceId: params.espaceId,
       workspaceId: params.workspaceId,
       parentId: params.parentId ?? null,
-      section: 'prive',
+      section: params.section ?? 'prive',
       ordre: 0,
     } as Partial<Page>);
     await creerBlocs(page._id, blocs, 0);

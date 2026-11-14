@@ -1048,6 +1048,9 @@ export async function appliquerPlanAgent(
           espaceId: parent ? identifiantDe(parent.espaceId) : params.espaceId,
           workspaceId: params.workspaceId,
           parentId: parent?._id ?? null,
+          // Hérite la section du parent : une sous-page d'une page d'équipe doit
+          // rester visible dans l'arbre d'équipe ; « prive » par défaut à la racine.
+          section: parent?.section ?? 'prive',
         });
         if (resultat.page) connues.set(resultat.page._id, resultat.page);
         premierePageId = premierePageId ?? resultat.pageId;
