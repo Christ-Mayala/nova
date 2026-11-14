@@ -1,7 +1,7 @@
 'use client';
 
 import { Loader2, RotateCcw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { IconeDonnee } from '@/components/ui/IconeDonnee';
 import { Chargement, EtatVide } from '@/components/ui/Etats';
@@ -13,9 +13,9 @@ import { pages as apiPages } from '@/lib/api';
 import type { Page } from '@/lib/types';
 import { formaterDateHeure, identifiantDe } from '@/lib/utils';
 
-/** Sentinelle d'état : une opération globale (tout restaurer / tout supprimer). */
-const TOUT_RESTAURER = '__tout_restaurer__';
-const TOUT_SUPPRIMER = '__tout_supprimer__';
+/** Sentinelle d'état : une opération groupée (restaurer / supprimer la sélection). */
+const RESTAURER_SELECTION = '__restaurer_selection__';
+const SUPPRIMER_SELECTION = '__supprimer_selection__';
 
 /** Corbeille : pages supprimées (restauration ou suppression définitive). */
 export default function PageCorbeille() {
@@ -27,6 +27,9 @@ export default function PageCorbeille() {
   const [pagesSupprimees, setPagesSupprimees] = useState<Page[]>([]);
   const [chargement, setChargement] = useState(true);
   const [enCours, setEnCours] = useState<string | null>(null);
+  /** Identifiants des pages cochées. */
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const refTout = useRef<HTMLInputElement>(null);
 
   const charger = useCallback(async () => {
     setChargement(true);
@@ -43,6 +46,34 @@ export default function PageCorbeille() {
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // Ne conserve dans la sélection que des pages encore présentes dans la liste.
+  useEffect(() => {
+    setSelection((prec) => {
+      const valides = new Set([...prec].filter((id) => pagesSupprimees.some((p) => p._id === id)));
+      return valides.size === prec.size ? prec : valides;
+    });
+  }, [pagesSupprimees]);
+
+  const toutSelectionne = pagesSupprimees.length > 0 && selection.size === pagesSupprimees.length;
+
+  // État « partiel » de la case « tout sélectionner ».
+  useEffect(() => {
+    if (refTout.current) refTout.current.indeterminate = selection.size > 0 && !toutSelectionne;
+  }, [selection, toutSelectionne]);
+
+  function basculer(id: string) {
+    setSelection((prec) => {
+      const suivant = new Set(prec);
+      if (suivant.has(id)) suivant.delete(id);
+      else suivant.add(id);
+      return suivant;
+    });
+  }
+
+  function basculerTout() {
+    setSelection(toutSelectionne ? new Set() : new Set(pagesSupprimees.map((p) => p._id)));
+  }
 
   async function restaurer(page: Page) {
     if (!peutEditer) {
@@ -86,15 +117,19 @@ export default function PageCorbeille() {
     }
   }
 
-  async function toutRestaurer() {
+  const pagesSelectionnees = pagesSupprimees.filter((p) => selection.has(p._id));
+
+  async function restaurerSelection() {
     if (!peutEditer) {
       toasts.erreur('Connexion requise');
       return;
     }
-    setEnCours(TOUT_RESTAURER);
+    const cibles = pagesSelectionnees;
+    if (cibles.length === 0) return;
+    setEnCours(RESTAURER_SELECTION);
     let faites = 0;
     try {
-      for (const page of pagesSupprimees) {
+      for (const page of cibles) {
         await apiPages.restaurer(page._id);
         faites += 1;
       }
@@ -109,28 +144,29 @@ export default function PageCorbeille() {
     }
   }
 
-  async function toutSupprimer() {
+  async function supprimerSelection() {
     if (!peutEditer) {
       toasts.erreur('Connexion requise');
       return;
     }
+    const cibles = pagesSelectionnees;
+    if (cibles.length === 0) return;
     const ok = await confirmer({
-      titre: `Supprimer définitivement ${pagesSupprimees.length} page${
-        pagesSupprimees.length > 1 ? 's' : ''
-      } ?`,
+      titre: `Supprimer définitivement ${cibles.length} page${cibles.length > 1 ? 's' : ''} ?`,
       message: 'Cette action est irréversible. Ces pages et leur contenu seront perdus.',
-      libelleConfirmer: 'Tout supprimer',
+      libelleConfirmer: 'Supprimer définitivement',
       danger: true,
     });
     if (!ok) return;
-    setEnCours(TOUT_SUPPRIMER);
+    setEnCours(SUPPRIMER_SELECTION);
     let faites = 0;
     try {
-      for (const page of pagesSupprimees) {
+      for (const page of cibles) {
         await apiPages.supprimer(page._id, { includeDeleted: true });
         faites += 1;
       }
-      setPagesSupprimees([]);
+      setPagesSupprimees((prec) => prec.filter((p) => !selection.has(p._id)));
+      setSelection(new Set());
       toasts.succes(
         `${faites} page${faites > 1 ? 's' : ''} supprimée${faites > 1 ? 's' : ''} définitivement`
       );
@@ -150,36 +186,6 @@ export default function PageCorbeille() {
         <Trash2 className="h-5 w-5 texte-faible" />
         <h1 className="text-xl font-bold">Corbeille</h1>
         <span className="texte-faible text-sm">({pagesSupprimees.length})</span>
-        {pagesSupprimees.length > 0 && (
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toutRestaurer}
-              disabled={enCours !== null}
-              className="bouton gap-1.5 text-xs"
-            >
-              {enCours === TOUT_RESTAURER ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RotateCcw className="h-3.5 w-3.5" />
-              )}
-              Tout restaurer
-            </button>
-            <button
-              type="button"
-              onClick={toutSupprimer}
-              disabled={enCours !== null}
-              className="bouton gap-1.5 text-xs text-red-600 dark:text-red-400"
-            >
-              {enCours === TOUT_SUPPRIMER ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" />
-              )}
-              Tout supprimer
-            </button>
-          </div>
-        )}
       </div>
 
       {pagesSupprimees.length === 0 ? (
@@ -189,48 +195,105 @@ export default function PageCorbeille() {
           description="Les pages supprimées apparaissent ici pendant que vous pouvez encore les restaurer."
         />
       ) : (
-        <ul className="flex flex-col gap-1">
-          {pagesSupprimees.map((page) => {
-            const espace = espaceParId(identifiantDe(page.espaceId));
-            return (
-              <li
-                key={page._id}
-                className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm texte-doux">
+              <input
+                ref={refTout}
+                type="checkbox"
+                className="h-4 w-4 accent-sky-600"
+                checked={toutSelectionne}
+                onChange={basculerTout}
+                disabled={enCours !== null}
+              />
+              Tout sélectionner
+            </label>
+            <span className="texte-faible text-xs">
+              {selection.size} sélectionnée{selection.size > 1 ? 's' : ''}
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={restaurerSelection}
+                disabled={selection.size === 0 || enCours !== null}
+                className="bouton gap-1.5 text-xs"
               >
-                <IconeDonnee icone={page.icone} className="h-4 w-4 shrink-0 texte-doux" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate">{page.titre}</p>
-                  <p className="mt-0.5 text-xs texte-doux">
-                    {espace ? `${espace.nom} · ` : ''}
-                    Supprimée le {formaterDateHeure(page.deletedAt || page.updatedAt)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => restaurer(page)}
-                  disabled={enCours !== null}
-                  className="bouton gap-1.5 text-xs"
-                >
-                  {enCours === page._id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  )}
-                  Restaurer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => supprimerDefinitivement(page)}
-                  disabled={enCours !== null}
-                  className="bouton gap-1.5 text-xs text-red-600 dark:text-red-400"
-                >
+                {enCours === RESTAURER_SELECTION ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5" />
+                )}
+                Restaurer ({selection.size})
+              </button>
+              <button
+                type="button"
+                onClick={supprimerSelection}
+                disabled={selection.size === 0 || enCours !== null}
+                className="bouton gap-1.5 text-xs text-red-600 dark:text-red-400"
+              >
+                {enCours === SUPPRIMER_SELECTION ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
                   <Trash2 className="h-3.5 w-3.5" />
-                  Supprimer
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                )}
+                Supprimer ({selection.size})
+              </button>
+            </div>
+          </div>
+
+          <ul className="flex flex-col gap-1">
+            {pagesSupprimees.map((page) => {
+              const espace = espaceParId(identifiantDe(page.espaceId));
+              const cochee = selection.has(page._id);
+              return (
+                <li
+                  key={page._id}
+                  className={`flex items-center gap-3 rounded-md px-3 py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] ${
+                    cochee ? 'bg-sky-500/[0.06]' : ''
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-sky-600"
+                    checked={cochee}
+                    onChange={() => basculer(page._id)}
+                    disabled={enCours !== null}
+                  />
+                  <IconeDonnee icone={page.icone} className="h-4 w-4 shrink-0 texte-doux" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate">{page.titre}</p>
+                    <p className="mt-0.5 text-xs texte-doux">
+                      {espace ? `${espace.nom} · ` : ''}
+                      Supprimée le {formaterDateHeure(page.deletedAt || page.updatedAt)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => restaurer(page)}
+                    disabled={enCours !== null}
+                    className="bouton gap-1.5 text-xs"
+                  >
+                    {enCours === page._id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    )}
+                    Restaurer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => supprimerDefinitivement(page)}
+                    disabled={enCours !== null}
+                    className="bouton gap-1.5 text-xs text-red-600 dark:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Supprimer
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );
