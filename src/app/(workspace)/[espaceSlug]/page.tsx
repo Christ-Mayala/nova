@@ -37,7 +37,15 @@ export default function PageEspace({ params }: { params: { espaceSlug: string } 
     let annule = false;
     listerTout(apiBases, { espaceId: espace._id })
       .then((trouvees) => {
-        if (!annule) setBases(trouvees.filter((b) => identifiantDe(b.espaceId as { _id: string } | string) === espace._id));
+        if (!annule)
+          setBases(
+            trouvees.filter(
+              (b) =>
+                identifiantDe(b.espaceId as { _id: string } | string) === espace._id &&
+                // Les bases privées n'apparaissent pas dans le répertoire d'équipe.
+                (b.section ?? 'equipe') !== 'prive'
+            )
+          );
       })
       .catch(() => {
         if (!annule) setBases([]);

@@ -407,6 +407,8 @@ export function VuePage({ pageId }: { pageId: string }) {
         icone: '📊',
         pageId: page._id,
         espaceId: identifiantDe(page.espaceId) || undefined,
+        // La base rattachée à la page en hérite la visibilité (privée par défaut).
+        section: page.section ?? 'prive',
         enLigne: true,
         proprietes: [
           { nom: 'Statut', type: 'statut', options: { groupes: ['À faire', 'En cours', 'Terminé'] } },

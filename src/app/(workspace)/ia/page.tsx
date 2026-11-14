@@ -587,6 +587,7 @@ export default function PageIA() {
       <ModaleAgentIA
         ouvert={agentOuvert}
         plan={planAgent}
+        pageCouranteId={pageSource || undefined}
         onFermer={() => setAgentOuvert(false)}
         onApplique={() => setDerniereAgent(derniereApplication())}
         onRelancer={(instruction) => {

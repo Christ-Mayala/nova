@@ -264,6 +264,8 @@ export interface Base extends BaseDRY {
   icone?: string;
   pageId?: string;
   espaceId?: Espace | string;
+  /** Visibilité de la base : « prive » (défaut), « equipe » ou « partage ». */
+  section?: SectionPage;
   enLigne?: boolean;
   proprietes?: ProprieteBase[];
   vues?: VueBase[];

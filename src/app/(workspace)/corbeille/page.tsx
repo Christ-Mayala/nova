@@ -13,6 +13,10 @@ import { pages as apiPages } from '@/lib/api';
 import type { Page } from '@/lib/types';
 import { formaterDateHeure, identifiantDe } from '@/lib/utils';
 
+/** Sentinelle d'état : une opération globale (tout restaurer / tout supprimer). */
+const TOUT_RESTAURER = '__tout_restaurer__';
+const TOUT_SUPPRIMER = '__tout_supprimer__';
+
 /** Corbeille : pages supprimées (restauration ou suppression définitive). */
 export default function PageCorbeille() {
   const { rafraichir, espaceParId } = useDonnees();
@@ -82,6 +86,62 @@ export default function PageCorbeille() {
     }
   }
 
+  async function toutRestaurer() {
+    if (!peutEditer) {
+      toasts.erreur('Connexion requise');
+      return;
+    }
+    setEnCours(TOUT_RESTAURER);
+    let faites = 0;
+    try {
+      for (const page of pagesSupprimees) {
+        await apiPages.restaurer(page._id);
+        faites += 1;
+      }
+      await charger();
+      await rafraichir();
+      toasts.succes(`${faites} page${faites > 1 ? 's' : ''} restaurée${faites > 1 ? 's' : ''}`);
+    } catch (e) {
+      await charger();
+      toasts.erreur('Restauration interrompue', e instanceof Error ? e.message : undefined);
+    } finally {
+      setEnCours(null);
+    }
+  }
+
+  async function toutSupprimer() {
+    if (!peutEditer) {
+      toasts.erreur('Connexion requise');
+      return;
+    }
+    const ok = await confirmer({
+      titre: `Supprimer définitivement ${pagesSupprimees.length} page${
+        pagesSupprimees.length > 1 ? 's' : ''
+      } ?`,
+      message: 'Cette action est irréversible. Ces pages et leur contenu seront perdus.',
+      libelleConfirmer: 'Tout supprimer',
+      danger: true,
+    });
+    if (!ok) return;
+    setEnCours(TOUT_SUPPRIMER);
+    let faites = 0;
+    try {
+      for (const page of pagesSupprimees) {
+        await apiPages.supprimer(page._id, { includeDeleted: true });
+        faites += 1;
+      }
+      setPagesSupprimees([]);
+      toasts.succes(
+        `${faites} page${faites > 1 ? 's' : ''} supprimée${faites > 1 ? 's' : ''} définitivement`
+      );
+    } catch (e) {
+      await charger();
+      toasts.erreur('Suppression interrompue', e instanceof Error ? e.message : undefined);
+    } finally {
+      setEnCours(null);
+    }
+  }
+
   if (chargement) return <Chargement libelle="Chargement de la corbeille…" />;
 
   return (
@@ -90,6 +150,36 @@ export default function PageCorbeille() {
         <Trash2 className="h-5 w-5 texte-faible" />
         <h1 className="text-xl font-bold">Corbeille</h1>
         <span className="texte-faible text-sm">({pagesSupprimees.length})</span>
+        {pagesSupprimees.length > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toutRestaurer}
+              disabled={enCours !== null}
+              className="bouton gap-1.5 text-xs"
+            >
+              {enCours === TOUT_RESTAURER ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+              Tout restaurer
+            </button>
+            <button
+              type="button"
+              onClick={toutSupprimer}
+              disabled={enCours !== null}
+              className="bouton gap-1.5 text-xs text-red-600 dark:text-red-400"
+            >
+              {enCours === TOUT_SUPPRIMER ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Tout supprimer
+            </button>
+          </div>
+        )}
       </div>
 
       {pagesSupprimees.length === 0 ? (
@@ -118,7 +208,7 @@ export default function PageCorbeille() {
                 <button
                   type="button"
                   onClick={() => restaurer(page)}
-                  disabled={enCours === page._id}
+                  disabled={enCours !== null}
                   className="bouton gap-1.5 text-xs"
                 >
                   {enCours === page._id ? (
@@ -131,7 +221,7 @@ export default function PageCorbeille() {
                 <button
                   type="button"
                   onClick={() => supprimerDefinitivement(page)}
-                  disabled={enCours === page._id}
+                  disabled={enCours !== null}
                   className="bouton gap-1.5 text-xs text-red-600 dark:text-red-400"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

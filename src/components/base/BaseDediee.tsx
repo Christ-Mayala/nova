@@ -73,6 +73,8 @@ export function BaseDediee({
             titre: config.titre,
             icone: config.icone,
             espaceId: espaceId || undefined,
+            // Base transversale de l'espace de travail : partagée avec l'équipe.
+            section: 'equipe',
             enLigne: true,
             proprietes: config.proprietes,
             vues: config.vues,

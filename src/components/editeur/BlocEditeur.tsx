@@ -2637,6 +2637,7 @@ function BlocIaPage({
       <ModaleAgentIA
         ouvert={ouvert}
         plan={plan}
+        pageCouranteId={bloc.pageId}
         onFermer={() => setOuvert(false)}
         onRelancer={(demande) => {
           setOuvert(false);

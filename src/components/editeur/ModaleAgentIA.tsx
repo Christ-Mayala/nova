@@ -70,6 +70,7 @@ export function ModaleAgentIA({
   plan,
   onApplique,
   onRelancer,
+  pageCouranteId,
 }: {
   ouvert: boolean;
   onFermer: () => void;
@@ -78,6 +79,8 @@ export function ModaleAgentIA({
   onApplique?: (resultat: ResultatAgent) => void;
   /** Relance l'agent avec l'instruction choisie (option d'une question). */
   onRelancer?: (instruction: string) => void;
+  /** Page de contexte : emplacement par défaut des bases créées par l'agent. */
+  pageCouranteId?: string;
 }) {
   const { pages, espaces, workspaceActif, rafraichir } = useDonnees();
   const { utilisateur, peutEditer } = useAuth();
@@ -168,6 +171,7 @@ export function ModaleAgentIA({
         {
           pages,
           espaceId: espaceChoisi,
+          pageCouranteId,
           workspaceId: workspaceActif?._id,
           auteurNom: utilisateur ? nomUtilisateur(utilisateur) || utilisateur.email : null,
         }

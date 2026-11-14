@@ -87,6 +87,8 @@ export interface ActionCreerBase {
   type: 'creer_base';
   titre: string;
   icone?: string;
+  /** Titre de la page qui reçoit la base ; page courante si non précisé. */
+  page?: string;
   proprietes?: ProprieteBase[];
 }
 
@@ -317,7 +319,8 @@ Types d'actions autorisés (champ "type") :
 4. "deplacer_page" — {"type":"deplacer_page","page":"...","pageParente":"titre de la nouvelle page parente ou null"}
 5. "archiver_page" — {"type":"archiver_page","page":"..."} (met la page et ses sous-pages à la corbeille)
 6. "creer_base" — créer une base de données.
-   {"type":"creer_base","titre":"...","icone":"emoji","proprietes":[{"nom":"Statut","type":"statut","options":{"groupes":["À faire","En cours","Terminé"]}},{"nom":"Échéance","type":"date"}]}
+   {"type":"creer_base","titre":"...","icone":"emoji","page":"titre exact de la page qui reçoit la base (page courante si absent)","proprietes":[{"nom":"Statut","type":"statut","options":{"groupes":["À faire","En cours","Terminé"]}},{"nom":"Échéance","type":"date"}]}
+   La base est rattachée à la page indiquée et en hérite la visibilité : privée par défaut. Ne la place jamais dans l'équipe sans demande explicite.
    Types de propriétés : ${TYPES_PROPRIETE.join(', ')}.
 7. "creer_element" — ajouter une ligne (rendez-vous, tâche, contact…) dans une base.
    {"type":"creer_element","base":"titre exact de la base","titre":"...","valeurs":{"Nom de propriété":"valeur"},"dateDebut":"ISO facultatif","dateFin":"ISO facultatif","priorite":"basse|moyenne|haute|urgente"}
@@ -499,6 +502,7 @@ function analyserAction(element: unknown): ActionAgent | null {
         type: 'creer_base',
         titre,
         icone: texte(entree.icone, 8) || undefined,
+        page: texte(entree.page, 200) || undefined,
         proprietes: lireProprietes(entree.proprietes),
       };
     }
@@ -884,6 +888,8 @@ export interface ParametresAgent {
   pages: Page[];
   /** Espace d'équipe par défaut pour les créations. */
   espaceId?: string;
+  /** Page ouverte : emplacement par défaut des bases créées. */
+  pageCouranteId?: string;
   workspaceId?: string;
   auteurNom?: string | null;
 }
@@ -983,12 +989,24 @@ async function trouverBase(nom: string, params: ParametresAgent): Promise<Base |
   return choisirBase(existantes, titre, params);
 }
 
+/**
+ * Emplacement d'une base créée par l'agent : la page visée (ou page courante à
+ * défaut). La base en hérite l'espace et la visibilité — privée à défaut, pour
+ * ne jamais publier dans l'équipe une base que l'utilisateur n'a pas demandée là.
+ */
+export interface EmplacementBase {
+  pageId?: string;
+  espaceId?: string;
+  section?: Page['section'];
+}
+
 /** Retrouve une base par titre (dans l'espace courant) ou la crée. */
 async function assurerBase(
   nom: string,
   params: ParametresAgent,
   proprietes?: ProprieteBase[],
-  icone?: string
+  icone?: string,
+  emplacement?: EmplacementBase
 ): Promise<Base> {
   const titre = nom.trim() || 'Base';
   const trouvee = await trouverBase(titre, params);
@@ -1001,7 +1019,9 @@ async function assurerBase(
   return apiBases.creer({
     titre,
     icone: icone || defaut?.icone || '📋',
-    espaceId: params.espaceId,
+    espaceId: emplacement?.espaceId ?? params.espaceId,
+    pageId: emplacement?.pageId,
+    section: emplacement?.section ?? 'prive',
     enLigne: true,
     proprietes: proprietesBase,
     vues: vuesBase,
@@ -1035,6 +1055,21 @@ export async function appliquerPlanAgent(
       liste.find((page) => normaliserTitre(page.titre || '') === cle) ??
       liste.find((page) => normaliserTitre(page.titre || '').includes(cle))
     );
+  };
+
+  /**
+   * Emplacement d'une base créée : la page visée par l'action, sinon la page
+   * courante. La base en hérite l'espace et la visibilité (privée à défaut).
+   */
+  const emplacementBase = (nomPage?: string): EmplacementBase => {
+    const cible =
+      (nomPage ? chercherPage(nomPage) : undefined) ??
+      (params.pageCouranteId ? connues.get(params.pageCouranteId) : undefined);
+    return {
+      pageId: cible?._id,
+      espaceId: (cible ? identifiantDe(cible.espaceId) : params.espaceId) || undefined,
+      section: cible?.section ?? 'prive',
+    };
   };
 
   for (const action of plan.actions) {
@@ -1144,14 +1179,21 @@ export async function appliquerPlanAgent(
         // supprimée lors d'une annulation.
         const existante = await trouverBase(action.titre, params);
         const base =
-          existante ?? (await assurerBase(action.titre, params, action.proprietes, action.icone));
+          existante ??
+          (await assurerBase(
+            action.titre,
+            params,
+            action.proprietes,
+            action.icone,
+            emplacementBase(action.page)
+          ));
         if (!existante) annulations.push({ type: 'base_creee', baseId: base._id });
         faits.push(`Base « ${base.titre} » disponible`);
         break;
       }
 
       case 'creer_element': {
-        const base = await assurerBase(action.base, params);
+        const base = await assurerBase(action.base, params, undefined, undefined, emplacementBase());
         const lignes = await listerTout(apiElements, { baseId: base._id }).catch(() => [] as Element[]);
         const cible = normaliserTitre(action.titre);
         const jourVise = action.dateDebut ? jour(action.dateDebut) : null;
